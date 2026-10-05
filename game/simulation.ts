@@ -47,14 +47,14 @@ export function plantPlot(s:GameState,id:number):GameState {
   const p=s.plots.find(x=>x.id===id);
   if(!p||p.status!=='prepared') return {...s,toast:'Prepare the soil before planting.'};
   if(s.energy<4) return {...s,toast:'You are out of energy. Advance the day.'};
-  const next={...s,energy:s.energy-4,plots:s.plots.map(x=>x.id===id?{...x,status:'planted',growth:0,health:100}:x),toast:'Ginger planted. Advance the day to grow it.'};
+  const next:GameState={...s,energy:s.energy-4,plots:s.plots.map(x=>x.id===id?{...x,status:'planted',growth:0,health:100}:x),toast:'Ginger planted. Advance the day to grow it.'};
   const planted=next.plots.filter(p=>['planted','growing','ready'].includes(p.status)).length;
   return mission(next,'plant',planted);
 }
 
 export function advanceDay(s:GameState, roll=Math.random()):GameState {
   const weather:Weather = roll>.82?'storm':roll>.55?'rain':'sunny';
-  const plots=s.plots.map(p=>{
+  const plots=s.plots.map((p):Plot=>{
     if(!['planted','growing'].includes(p.status)) return p;
     const growth=Math.min(100,p.growth+(weather==='storm'?12:weather==='rain'?23:18));
     const moisture=Math.max(20,Math.min(95,p.moisture+(weather==='storm'?35:weather==='rain'?22:-11)));
@@ -63,7 +63,7 @@ export function advanceDay(s:GameState, roll=Math.random()):GameState {
   });
   const marketShift = weather==='storm' ? 1.08 : weather==='rain' ? .99 : 1.01;
   const marketPrice=Math.round(Math.max(1_900_000,Math.min(3_800_000,s.marketPrice*marketShift)));
-  const next={...s,day:s.day+1,energy:100,plots,weather,marketPrice,xp:s.xp+5,level:levelFromXp(s.xp+5),toast:weather==='storm'?'Storm warning. Inspect drainage and protect harvested stock.':weather==='rain'?'Rain across the farm. Moisture is rising.':'Clear weather. Your crops are growing steadily.'};
+  const next:GameState={...s,day:s.day+1,energy:100,plots,weather,marketPrice,xp:s.xp+5,level:levelFromXp(s.xp+5),toast:weather==='storm'?'Storm warning. Inspect drainage and protect harvested stock.':weather==='rain'?'Rain across the farm. Moisture is rising.':'Clear weather. Your crops are growing steadily.'};
   return next;
 }
 export function harvestPlot(s:GameState,id:number):GameState {
@@ -71,7 +71,7 @@ export function harvestPlot(s:GameState,id:number):GameState {
   if(!p||p.status!=='ready') return {...s,toast:'This crop is not ready for harvest.'};
   if(s.energy<6) return {...s,toast:'You are out of energy. Advance the day.'};
   const tonnes=GINGER_PER_PLOT*(p.health/100);
-  const next={...s,energy:s.energy-6,freshGinger:s.freshGinger+tonnes,plots:s.plots.map(x=>x.id===id?{...x,status:'empty',growth:0,health:100}:x),xp:s.xp+20,level:levelFromXp(s.xp+20),toast:`Harvested ${tonnes.toFixed(2)}t fresh ginger.`};
+  const next:GameState={...s,energy:s.energy-6,freshGinger:s.freshGinger+tonnes,plots:s.plots.map(x=>x.id===id?{...x,status:'empty',growth:0,health:100}:x),xp:s.xp+20,level:levelFromXp(s.xp+20),toast:`Harvested ${tonnes.toFixed(2)}t fresh ginger.`};
   return mission(next,'harvest',tonnes);
 }
 export function processGinger(s:GameState):GameState {
