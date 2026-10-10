@@ -1,17 +1,20 @@
 'use client';
 import dynamic from 'next/dynamic';
 import { useEffect, useState } from 'react';
-import { WEATHER_INFO, maxEnergy, money, plotName, tankCapacity } from '../game/simulation';
+import { WEATHER_INFO, maxEnergy, money, plotName, tankCapacity, titleFor } from '../game/simulation';
 import { useGameStore, type Panel } from '../stores/gameStore';
 import BusinessPanel from './hud/BusinessPanel';
+import { CampaignJournal, MissionCard, StoryCard } from './hud/Campaign';
+import { CareerLadder, LevelUpCard, XpBar } from './hud/Career';
 import MarketPanel from './hud/MarketPanel';
 import PlotPanel from './hud/PlotPanel';
 import { InspectionModal, MorningReport } from './hud/Reports';
 import StoragePanel from './hud/StoragePanel';
+import TradePanel from './hud/TradePanel';
 import { InteractPrompt, NpcCard, TankCard } from './hud/WorldCards';
 
 const FarmScene = dynamic(() => import('./FarmScene'), { ssr: false, loading: () => <div className="scene-loading">Preparing your farm...</div> });
-const TABS: [Panel, string][] = [['farm', 'Farm'], ['storage', 'Storage'], ['market', 'Market'], ['business', 'Business'], ['journal', 'Journal']];
+const TABS: [Panel, string][] = [['farm', 'Farm'], ['storage', 'Storage'], ['market', 'Market'], ['trade', 'Trade'], ['business', 'Business'], ['journal', 'Journal']];
 const EVENT_LABEL = { priceCrash: '📉 Price crash', fuelSpike: '⛽ Fuel spike', workerShortage: '👷 Worker shortage' } as const;
 
 export default function Game() {
@@ -19,8 +22,10 @@ export default function Game() {
   const panel = s.panel, setPanel = s.openPanel;
   const [compact, setCompact] = useState(false);
   useEffect(() => { if (!s.toast) return; const t = setTimeout(s.clearToast, 3600); return () => clearTimeout(t); }, [s.toast, s.clearToast]);
+  // After the truck pulls out of the gate, follow the shipment on the map.
+  const shipAt = s.fx?.kind === 'ship' ? s.fx.at : null, openPanel = s.openPanel;
+  useEffect(() => { if (shipAt === null) return; const t = setTimeout(() => openPanel('trade'), 3500); return () => clearTimeout(t); }, [shipAt, openPanel]);
 
-  const mission = s.missions.find(m => !m.complete);
   const crops = s.plots.filter(p => p.status === 'growing' || p.status === 'ready');
   const ready = s.plots.filter(p => p.status === 'ready');
   const freshKg = s.batches.filter(b => b.product === 'fresh').reduce((a, b) => a + b.kg, 0);
@@ -37,16 +42,15 @@ export default function Game() {
             <div className="stat"><span>Day</span><b>{s.day}</b></div>
             <div className="stat"><span>Energy</span><b>{s.energy}/{maxEnergy(s)}</b></div>
             <div className="stat"><span>Tank</span><b>{s.water.toLocaleString()} L</b></div>
-            <div className="stat"><span>Level</span><b>{s.level}</b></div>
+            <div className="stat" title={titleFor(s.level)}><span>Level</span><b>{s.level}</b></div>
           </div>
         </header>
 
         <section className={`side ${compact ? 'compact' : ''}`}>
           <button className="collapse" onClick={() => setCompact(!compact)} aria-label={compact ? 'Expand panel' : 'Collapse panel'}>{compact ? '▸' : '▾'}</button>
           <div className="eyebrow">Season 01 · Ginger · Kafanchan</div>
-          <div className="level-line"><span>Level {s.level}</span><span>{s.xp} XP · Rep {s.reputation}</span></div>
-          <div className="progress"><i style={{ width: `${(s.xp % 250) / 2.5}%` }} /></div>
-          <div className="mission"><b>Mission</b><br />{mission ? `${mission.description} (${Math.round(mission.progress).toLocaleString()}/${mission.target.toLocaleString()})` : 'All starter missions complete.'}</div>
+          <XpBar />
+          <MissionCard />
           <div className="forecast">
             <span className="label">Today: {WEATHER_INFO[s.weather].icon} {WEATHER_INFO[s.weather].label}</span>
             <div className="forecast-days">
@@ -80,7 +84,7 @@ export default function Game() {
         </section>
 
         <div className="mini-stats">
-          <div><span>Planted</span><b>{crops.length}/16</b></div>
+          <div><span>Planted</span><b>{crops.length}/{s.plots.length}</b></div>
           <div><span>Fresh</span><b>{Math.round(freshKg)} kg</b></div>
           <div><span>Drying</span><b>{s.dryingJobs.length} racks</b></div>
           <div><span>Workers</span><b>{s.workers}</b></div>
@@ -100,10 +104,15 @@ export default function Game() {
               <button className="close" onClick={() => setPanel('farm')}>Close</button>
               {panel === 'storage' && <StoragePanel />}
               {panel === 'market' && <MarketPanel />}
+              {panel === 'trade' && <TradePanel />}
               {panel === 'business' && <BusinessPanel />}
               {panel === 'journal' && <>
                 <div className="eyebrow">Farmer&apos;s journal</div>
-                <h2>What the farm is teaching you</h2>
+                <h2>Farm to Fortune</h2>
+                <CampaignJournal />
+                <h4>Career</h4>
+                <CareerLadder />
+                <h4>What the farm is teaching you</h4>
                 {s.log.map((l, i) => <div key={i} className={`log ${l.severity}`}><small>Day {l.day}</small> {l.text}</div>)}
                 <button className="link" onClick={s.reset}>Start a new season (new random seed)</button>
               </>}
@@ -111,6 +120,8 @@ export default function Game() {
           </div>
         )}
         <InspectionModal />
+        <StoryCard />
+        <LevelUpCard />
       </div>
     </div>
   );

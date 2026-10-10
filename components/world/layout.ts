@@ -25,7 +25,7 @@ export const TRUCK_POS = [-7.2, 0, -4.5] as const;
 
 export const NPC_SPOTS: Record<NpcId, { pos: [number, number, number]; facing: number; variant: string; tone: number }> = {
   baba: { pos: [-6.5, 0, -10], facing: Math.PI * 0.8, variant: 'male-f', tone: 1 },
-  amaka: { pos: [8.4, 0, -3.6], facing: -Math.PI * 0.6, variant: 'female-d', tone: 2 },
+  amaka: { pos: [9.8, 0, -3.3], facing: -Math.PI * 0.6, variant: 'female-d', tone: 2 },
   chinedu: { pos: [-5.2, 0, -2.8], facing: Math.PI * 0.25, variant: 'male-c', tone: 3 },
 };
 

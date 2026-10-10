@@ -1,10 +1,13 @@
 import {
-  BUYERS, DRYING_COST_PER_KG, DRYING_RACK_KG, ENERGY, HIRE_COST, LITRES_PER_FUEL_LITRE, SAFE_MOISTURE, UPGRADES, WORKER_ENERGY,
-  type UpgradeId,
+  BUYERS, CUT, DRYING_COST_PER_KG, DRYING_RACK_KG, ENERGY, FACTORY_SEALED_DISCOUNT, GRIND_COST_PER_KG, GRIND_FUEL_PER_KG, GRIND_MAX_MOISTURE, GRIND_YIELD,
+  HIRE_COST, LITRES_PER_FUEL_LITRE, MAX_LAND_LEASES, PACKAGING, SAFE_MOISTURE, SORT, UPGRADES, WASH, WORKER_ENERGY, type UpgradeId,
 } from './config';
-import { checkSale, gradeForBatch, inspectBatchReport } from './quality';
-import { addXp, blocked, earn, fail, fuelPrice, log, money, progressMission, spend, tankCapacity } from './state';
-import type { GameState } from './types';
+import { lockedReason, maxWorkers, type UnlockId } from './levels';
+import { checkSale, gradeForBatch, gradeLabel, inspectBatchReport } from './quality';
+import { addXp, blocked, clamp, earn, fail, fuelPrice, leasedPlots, log, money, spend, tankCapacity } from './state';
+import type { Batch, DryingJob, GameState, Packaging, PrepChoices } from './types';
+
+const PRODUCT_NAME = { fresh: 'fresh ginger', dried: 'dried ginger', powder: 'ginger powder' } as const;
 
 export function sellBatch(s: GameState, batchId: number, buyerId: string): GameState {
   const batch = s.batches.find(b => b.id === batchId), buyer = BUYERS.find(b => b.id === buyerId);
@@ -15,26 +18,57 @@ export function sellBatch(s: GameState, batchId: number, buyerId: string): GameS
     const next = rejected ? log({ ...s, reputation: Math.max(0, s.reputation - 1) }, { text: `${buyer.name}: ${check.reason}`, severity: 'warning' }) : s;
     return { ...next, toast: check.reason, lastInspection: rejected ? inspectBatchReport(batch, s.day) : s.lastInspection };
   }
-  const grade = gradeForBatch(batch);
-  const next = earn({ ...s, batches: s.batches.filter(b => b.id !== batchId) }, check.revenue);
-  const logged = log(next, { text: `Sold ${Math.round(batch.kg)} kg Grade ${grade} ${batch.product} ginger to ${buyer.name} for ${money(check.revenue)}.`, severity: 'good' });
-  const rep = { ...logged, reputation: s.reputation + (grade === 'A' ? 2 : 1), toast: `${buyer.name} paid ${money(check.revenue)} for Grade ${grade} ${batch.product} ginger.` };
-  return progressMission(addXp(rep, batch.product === 'dried' ? 60 : 30), 'sell', check.revenue);
+  const grade = gradeForBatch(batch), label = gradeLabel(grade);
+  const stats = batch.product === 'fresh' ? { ...s.stats, freshSoldKg: s.stats.freshSoldKg + batch.kg } : s.stats;
+  const next = earn({ ...s, stats, batches: s.batches.filter(b => b.id !== batchId) }, check.revenue);
+  const logged = log(next, { text: `Sold ${Math.round(batch.kg)} kg ${label} ${PRODUCT_NAME[batch.product]} to ${buyer.name} for ${money(check.revenue)}.`, severity: 'good' });
+  const rep = { ...logged, reputation: s.reputation + (grade === 'C' ? 0 : grade === 'B' ? 1 : 2), toast: `${buyer.name} paid ${money(check.revenue)} for ${label} ${PRODUCT_NAME[batch.product]}.` };
+  return addXp(rep, batch.product === 'fresh' ? 30 : 60);
 }
 
 export const rackLoadKg = (s: GameState) => s.dryingJobs.reduce((sum, j) => sum + j.freshKg, 0);
+/** The Processing Factory adds a second drying line. */
+export const rackCapacity = (s: GameState) => DRYING_RACK_KG * (s.upgrades.factory ? 2 : 1);
+export const rackSpaceKg = (s: GameState) => Math.max(0, rackCapacity(s) - rackLoadKg(s));
 
-export function startDrying(s: GameState, batchId: number): GameState {
-  const batch = s.batches.find(b => b.id === batchId);
-  if (!batch || batch.product !== 'fresh') return fail(s, 'Only fresh ginger can go on the drying racks.');
-  if (rackLoadKg(s) + batch.kg > DRYING_RACK_KG) return fail(s, `Drying racks hold ${DRYING_RACK_KG.toLocaleString()} kg of fresh ginger. Finish a batch first.`);
-  const cost = Math.round(batch.kg * DRYING_COST_PER_KG);
-  const why = blocked(s, { energy: ENERGY.dry, cash: cost });
-  if (why) return fail(s, why);
-  const job = { id: s.nextId, freshKg: batch.kg, dryMatterKg: batch.kg * (1 - batch.moisture / 100), moisture: batch.moisture, quality: batch.quality, days: 0, covered: false };
-  const next = { ...spend(s, cost, ENERGY.dry), nextId: s.nextId + 1, batches: s.batches.filter(b => b.id !== batchId), dryingJobs: [...s.dryingJobs, job] };
-  return { ...next, toast: `Washed, peeled and sliced ${Math.round(batch.kg)} kg (${money(cost)}). Racks are drying in the sun.` };
+export const DEFAULT_PREP: PrepChoices = { wash: 'thorough', sort: 'standard', cut: 'sliced' };
+
+/** What the washing, sorting and slicing stations will do to `kg` of a fresh batch. Used for the UI preview too. */
+export function prepPlan(b: Batch, c: PrepChoices, kg = b.kg) {
+  return {
+    kg,
+    keptKg: kg * SORT[c.sort].keep,
+    cost: Math.round(kg * (DRYING_COST_PER_KG + WASH[c.wash].costPerKg + SORT[c.sort].costPerKg + CUT[c.cut].costPerKg)),
+    litres: Math.round(kg * WASH[c.wash].litresPerKg),
+    quality: clamp(b.quality + SORT[c.sort].quality + CUT[c.cut].quality, 5, 100),
+    dryMatterKg: kg * SORT[c.sort].keep * (1 - b.moisture / 100) * CUT[c.cut].dryMatter,
+    rate: CUT[c.cut].rate,
+    soiled: c.wash === 'rinse',
+  };
 }
+
+/** Wash → sort → slice, then onto the drying racks. Processes as much of the batch as the racks can hold. */
+export function startProcessing(s: GameState, batchId: number, choices: PrepChoices = DEFAULT_PREP): GameState {
+  const batch = s.batches.find(b => b.id === batchId);
+  if (!batch || batch.product !== 'fresh') return fail(s, 'Only fresh ginger can be washed, sliced and dried.');
+  const kg = Math.min(batch.kg, rackSpaceKg(s));
+  if (kg < 50) return fail(s, `The drying racks are full (${rackCapacity(s).toLocaleString()} kg). Bag a batch first.`);
+  const plan = prepPlan(batch, choices, kg);
+  if (plan.litres > s.water) return fail(s, `A thorough wash needs ${plan.litres.toLocaleString()} L of clean water; the tank has ${s.water.toLocaleString()} L. Pump the borehole, or just rinse.`);
+  const why = blocked(s, { energy: ENERGY.dry, cash: plan.cost });
+  if (why) return fail(s, why);
+  const job: DryingJob = { id: s.nextId, freshKg: plan.keptKg, dryMatterKg: plan.dryMatterKg, moisture: batch.moisture, quality: plan.quality, days: 0, covered: false, rate: plan.rate, soiled: plan.soiled };
+  const rest = batch.kg - kg;
+  const batches = rest > 1 ? s.batches.map(b => (b.id === batchId ? { ...b, kg: rest } : b)) : s.batches.filter(b => b.id !== batchId);
+  const next: GameState = {
+    ...spend(s, plan.cost, ENERGY.dry), water: s.water - plan.litres, nextId: s.nextId + 1, batches, dryingJobs: [...s.dryingJobs, job],
+    stats: { ...s.stats, processedKg: s.stats.processedKg + kg },
+  };
+  const culled = kg - plan.keptKg;
+  return { ...next, toast: `${WASH[choices.wash].label}, ${SORT[choices.sort].label.toLowerCase()}${culled > 1 ? ` (${Math.round(culled)} kg culled)` : ''}, ${CUT[choices.cut].label.toLowerCase()}: ${Math.round(plan.keptKg)} kg on the racks for ${money(plan.cost)}.${rest > 1 ? ` ${Math.round(rest)} kg left in store.` : ''}` };
+}
+/** Kept for callers that only need the default processing choices. */
+export const startDrying = (s: GameState, batchId: number) => startProcessing(s, batchId);
 
 export function toggleCover(s: GameState, jobId: number): GameState {
   const job = s.dryingJobs.find(j => j.id === jobId);
@@ -45,16 +79,55 @@ export function toggleCover(s: GameState, jobId: number): GameState {
   return { ...spend(s, 0, ENERGY.cover), dryingJobs, toast: job.covered ? 'Tarpaulin off: the slices are drying again.' : 'Racks covered: protected from rain, but no drying while covered.' };
 }
 
-export function finishDrying(s: GameState, jobId: number): GameState {
+export const dryKgOf = (j: DryingJob) => j.dryMatterKg / (1 - j.moisture / 100);
+/** The factory packaging line makes sealed bags cheaper. */
+export const packagingCost = (s: GameState, kg: number, p: Packaging) =>
+  Math.round(kg * PACKAGING[p].costPerKg * (p === 'sealed' && s.upgrades.factory ? 1 - FACTORY_SEALED_DISCOUNT : 1));
+
+/** Quality control and packing: take a rack off, inspect it, and bag it. */
+export function finishDrying(s: GameState, jobId: number, packaging: Packaging = 'bulk'): GameState {
   const job = s.dryingJobs.find(j => j.id === jobId);
   if (!job) return s;
-  const kg = job.dryMatterKg / (1 - job.moisture / 100);
-  const batch = { id: s.nextId, product: 'dried' as const, kg, quality: job.quality, moisture: job.moisture, createdDay: s.day };
+  const kg = dryKgOf(job), cost = packagingCost(s, kg, packaging);
+  const why = blocked(s, { energy: ENERGY.bag, cash: cost });
+  if (why) return fail(s, why);
+  const batch: Batch = { id: s.nextId, product: 'dried', kg, quality: job.quality, moisture: job.moisture, createdDay: s.day, packaging, soiled: job.soiled };
   const report = inspectBatchReport(batch, s.day);
-  const next = { ...s, nextId: s.nextId + 1, dryingJobs: s.dryingJobs.filter(j => j.id !== jobId), batches: [...s.batches, batch], lastInspection: report };
   const damp = job.moisture > SAFE_MOISTURE;
-  const logged = log(next, { text: `Bagged ${Math.round(kg)} kg dried ginger at ${job.moisture.toFixed(1)}% moisture (Grade ${report.grade}).`, severity: damp ? 'warning' : 'good' });
-  return progressMission(addXp({ ...logged, toast: damp ? `Bagged too early: ${job.moisture.toFixed(1)}% moisture.` : `Bagged ${Math.round(kg)} kg Grade ${report.grade} dried ginger.` }, 35), 'dry', job.freshKg);
+  const next: GameState = {
+    ...spend(s, cost, ENERGY.bag), nextId: s.nextId + 1, dryingJobs: s.dryingJobs.filter(j => j.id !== jobId), batches: [...s.batches, batch], lastInspection: report,
+    stats: damp ? s.stats : { ...s.stats, safeDriedKg: s.stats.safeDriedKg + kg },
+  };
+  const logged = log(next, { text: `Bagged ${Math.round(kg)} kg dried ginger in ${PACKAGING[packaging].label.toLowerCase()} at ${job.moisture.toFixed(1)}% moisture (${gradeLabel(report.grade)}).`, severity: damp ? 'warning' : 'good' });
+  return addXp({ ...logged, toast: damp ? `Bagged too early: ${job.moisture.toFixed(1)}% moisture.` : `Bagged ${Math.round(kg)} kg ${gradeLabel(report.grade)} dried ginger.` }, 35);
+}
+
+/** Total cost of grinding a dried batch: labour, diesel for the mill, and packaging. */
+export function grindCost(s: GameState, b: Batch, packaging: Packaging) {
+  return Math.round(b.kg * GRIND_COST_PER_KG + b.kg * GRIND_FUEL_PER_KG * fuelPrice(s) + packagingCost(s, b.kg * GRIND_YIELD, packaging));
+}
+
+/** Grinding dried ginger into powder on the hammer mill. Damp slices cake and clog. */
+export function grindBatch(s: GameState, batchId: number, packaging: Packaging = 'sealed'): GameState {
+  if (!s.upgrades.mill) return fail(s, 'You need a hammer mill to make powder. Buy one in Business.');
+  const b = s.batches.find(x => x.id === batchId);
+  if (!b || b.product !== 'dried') return fail(s, 'Only dried ginger can be milled.');
+  const cost = grindCost(s, b, packaging);
+  const why = blocked(s, { energy: ENERGY.grind, cash: cost });
+  if (why) return fail(s, why);
+  const caking = b.moisture > GRIND_MAX_MOISTURE ? 8 + (b.moisture - GRIND_MAX_MOISTURE) * 4 : 0;
+  const powder: Batch = {
+    id: s.nextId, product: 'powder', kg: b.kg * GRIND_YIELD, quality: clamp(b.quality - 2 - caking, 5, 100),
+    moisture: Math.max(6, b.moisture - 1), createdDay: s.day, packaging, soiled: b.soiled,
+  };
+  const report = inspectBatchReport(powder, s.day);
+  if (caking) report.warnings.unshift(`Ginger went into the mill at ${b.moisture.toFixed(1)}% moisture: the powder caked and clumped.`);
+  const next: GameState = {
+    ...spend(s, cost, ENERGY.grind), nextId: s.nextId + 1, batches: [...s.batches.filter(x => x.id !== batchId), powder], lastInspection: report,
+    stats: { ...s.stats, powderKg: s.stats.powderKg + powder.kg },
+  };
+  const logged = log(next, { text: `Milled ${Math.round(powder.kg)} kg ginger powder (${gradeLabel(report.grade)}) for ${money(cost)}.`, severity: caking ? 'warning' : 'good' });
+  return addXp({ ...logged, toast: `Milled ${Math.round(powder.kg)} kg ${gradeLabel(report.grade)} ginger powder.` }, 50);
 }
 
 export function inspectBatch(s: GameState, batchId: number): GameState {
@@ -72,6 +145,7 @@ export function pumpWater(s: GameState): GameState {
 }
 
 export function hireWorker(s: GameState): GameState {
+  if (s.workers >= maxWorkers(s.level)) return fail(s, `You can manage ${maxWorkers(s.level)} workers at Level ${s.level}. Grow the business to take on more.`);
   const why = blocked(s, { cash: HIRE_COST });
   if (why) return fail(s, why);
   return { ...spend(s, HIRE_COST), workers: s.workers + 1, toast: `Worker hired: +${WORKER_ENERGY} energy from tomorrow. Wages are paid every evening.` };
@@ -82,17 +156,41 @@ export function dismissWorker(s: GameState): GameState {
   return { ...s, workers: s.workers - 1, reputation: Math.max(0, s.reputation - 1), toast: 'Worker let go. Lower wages, less labour.' };
 }
 
+/** Which level unlock (if any) gates each upgrade. */
+export const UPGRADE_UNLOCK: Partial<Record<UpgradeId, UnlockId>> = { solarDryer: 'solarDryer', mill: 'mill', warehouse: 'warehouse', factory: 'factory', land: 'landExpansion' };
+
+export function ownsUpgrade(s: GameState, id: UpgradeId) {
+  if (id === 'irrigation' || id === 'mill' || id === 'solarDryer' || id === 'factory') return s.upgrades[id];
+  if (id === 'land') return s.upgrades.landLeased >= MAX_LAND_LEASES;
+  return false;
+}
+
+/** Why an upgrade can't be bought right now (ignoring cash), or null. */
+export function upgradeBlocked(s: GameState, id: UpgradeId): string | null {
+  if (ownsUpgrade(s, id)) return `${UPGRADES[id].label} is already ${id === 'land' ? 'leased' : 'installed'}.`;
+  const unlock = UPGRADE_UNLOCK[id];
+  return unlock ? lockedReason(s, unlock) : null;
+}
+
+/** Install an upgrade without charging for it (callers handle payment or financing). */
+export function applyUpgrade(s: GameState, id: UpgradeId): GameState {
+  const upgrades = { ...s.upgrades };
+  let plots = s.plots;
+  if (id === 'warehouse') upgrades.warehouseLevel++;
+  else if (id === 'tank') upgrades.tankLevel++;
+  else if (id === 'land') { upgrades.landLeased++; plots = [...s.plots, ...leasedPlots(s.plots.length)]; }
+  else upgrades[id] = true;
+  return { ...s, upgrades, plots, reputation: s.reputation + 1 };
+}
+
 export function buyUpgrade(s: GameState, id: UpgradeId): GameState {
   const u = UPGRADES[id];
-  if (id === 'irrigation' && s.upgrades.irrigation) return fail(s, 'Drip irrigation is already installed.');
+  const no = upgradeBlocked(s, id);
+  if (no) return fail(s, no);
   const why = blocked(s, { cash: u.cost });
   if (why) return fail(s, why);
-  const upgrades = { ...s.upgrades };
-  if (id === 'irrigation') upgrades.irrigation = true;
-  if (id === 'warehouse') upgrades.warehouseLevel++;
-  if (id === 'tank') upgrades.tankLevel++;
-  const next = log({ ...spend(s, u.cost), upgrades, reputation: s.reputation + 1 }, { text: `Invested in ${u.label.toLowerCase()} (${money(u.cost)}).`, severity: 'info' });
-  return { ...next, toast: `${u.label} ready.` };
+  const next = log(applyUpgrade(spend(s, u.cost), id), { text: `Invested in ${u.label.toLowerCase()} (${money(u.cost)}).`, severity: 'info' });
+  return addXp({ ...next, toast: `${u.label} ready.` }, 40);
 }
 
 export function toggleInsurance(s: GameState): GameState {

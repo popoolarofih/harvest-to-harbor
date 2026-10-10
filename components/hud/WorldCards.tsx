@@ -1,5 +1,5 @@
 'use client';
-import { LITRES_PER_FUEL_LITRE, NPCS, fuelPrice, money, npcAdvice, plotName, tankCapacity } from '../../game/simulation';
+import { LITRES_PER_FUEL_LITRE, NPCS, currentMission, fuelPrice, money, npcAdvice, plotName, tankCapacity } from '../../game/simulation';
 import { useGameStore, type Target } from '../../stores/gameStore';
 import { STATIONS } from '../world/layout';
 
@@ -51,12 +51,15 @@ export function NpcCard() {
   if (!s.talkingTo) return null;
   const npc = NPCS[s.talkingTo];
   const tips = npcAdvice(s, s.talkingTo);
+  const mission = currentMission(s);
+  const theirs = mission?.npc === s.talkingTo ? mission : null;
   return (
     <div className="card plot-panel npc-card">
       <button className="close" onClick={() => s.select(null)}>✕</button>
       <div className="eyebrow">{npc.role}</div>
       <h3>{npc.name}</h3>
-      <p className="quote">“{npc.greeting}”</p>
+      <p className="quote">“{theirs ? theirs.intro : npc.greeting}”</p>
+      {theirs && <p className="tip mission-tip"><b>{theirs.title}:</b> {theirs.hint}</p>}
       {tips.map(t => <p key={t} className="tip">{t}</p>)}
     </div>
   );

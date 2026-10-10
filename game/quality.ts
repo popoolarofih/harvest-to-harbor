@@ -1,19 +1,34 @@
 import {
-  BASE_YIELD_KG, BUYERS, DRYING_COST_PER_KG, GRADE_MULT, SAFE_MOISTURE, SEEDS, TREATMENTS, type Buyer,
+  BASE_YIELD_KG, BUYERS, CUT, DRYING_COST_PER_KG, EXPORT, GRADE_MULT, GRIND_COST_PER_KG, GRIND_YIELD, PACKAGING,
+  PREMIUM_MAX_MOISTURE, PREMIUM_MIN_QUALITY, SAFE_MOISTURE, SEEDS, SORT, TREATMENTS, WASH, type Buyer,
 } from './config';
-import { effectiveDrainage, money, plotName } from './state';
+import { effectiveDrainage, plotName } from './state';
 import type { Batch, GameState, InspectionReport, Plot, QualityGrade } from './types';
 
-const GRADE_RANK: Record<QualityGrade, number> = { A: 3, B: 2, C: 1 };
+const GRADE_RANK: Record<QualityGrade, number> = { Premium: 4, A: 3, B: 2, C: 1 };
 export const gradeAtLeast = (g: QualityGrade, min: QualityGrade) => GRADE_RANK[g] >= GRADE_RANK[min];
+export const gradeLabel = (g: QualityGrade) => (g === 'Premium' ? 'Premium' : `Grade ${g}`);
 
-export function gradeForBatch(b: Pick<Batch, 'product' | 'quality' | 'moisture'>): QualityGrade {
-  const byQuality: QualityGrade = b.quality >= 80 ? 'A' : b.quality >= 60 ? 'B' : 'C';
-  if (b.product === 'fresh') return byQuality;
+type Gradable = Pick<Batch, 'product' | 'quality' | 'moisture'> & Partial<Pick<Batch, 'packaging' | 'soiled'>>;
+
+export function gradeForBatch(b: Gradable): QualityGrade {
+  let grade: QualityGrade = b.quality >= 80 ? 'A' : b.quality >= 60 ? 'B' : 'C';
+  if (b.product === 'fresh') return grade;
   if (b.moisture > SAFE_MOISTURE + 2) return 'C';
-  if (b.moisture > SAFE_MOISTURE && byQuality === 'A') return 'B';
-  return byQuality;
+  if (b.moisture > SAFE_MOISTURE && grade === 'A') grade = 'B';
+  // Soil left by a quick rinse is a foreign-matter defect.
+  if (b.soiled && grade === 'A') grade = 'B';
+  // Premium needs excellent processing *and* packaging that keeps it that way.
+  if (grade === 'A' && !b.soiled && b.packaging === 'sealed' && b.quality >= PREMIUM_MIN_QUALITY && b.moisture <= PREMIUM_MAX_MOISTURE) return 'Premium';
+  return grade;
 }
+
+/** Ready for London Spice Co.: Grade A or better, sealed, safely dry. */
+export function isExportReady(b: Batch) {
+  return b.product !== 'fresh' && b.packaging === 'sealed' && b.moisture <= SAFE_MOISTURE && gradeAtLeast(gradeForBatch(b), EXPORT.minGrade);
+}
+export const exportReadyKg = (s: GameState) => s.batches.filter(isExportReady).reduce((sum, b) => sum + b.kg, 0);
+export const exportValue = (s: GameState, b: Batch) => Math.round(b.kg * s.market[b.product] * EXPORT.priceMult * GRADE_MULT[gradeForBatch(b)]);
 
 export function maturityFactor(p: Plot) {
   return p.status === 'ready' ? 1 + Math.min(0.12, 0.03 * p.daysReady) : p.growth / 100;
@@ -64,26 +79,32 @@ export function inspectPlotReport(p: Plot): InspectionReport {
   };
 }
 
+const PRODUCT_LABEL = { fresh: 'Fresh ginger', dried: 'Dried ginger', powder: 'Ginger powder' } as const;
+
 export function inspectBatchReport(b: Batch, day: number): InspectionReport {
   const grade = gradeForBatch(b);
   const warnings: string[] = [], consequences: string[] = [];
-  if (b.product === 'dried') {
+  if (b.product !== 'fresh') {
     if (b.moisture > SAFE_MOISTURE) {
       warnings.push(`Moisture ${b.moisture.toFixed(1)}%: above the recommended ${SAFE_MOISTURE}% level.`);
       consequences.push('Lower shelf stability: mould can develop in storage', 'Premium buyers will reject the batch', 'Lower selling price');
     }
-    if (b.quality < 60) { warnings.push('Slices are discoloured.'); consequences.push('Re-wetting by rain or slow drying darkens slices and lowers the grade.'); }
+    if (b.soiled) { warnings.push('Soil and grit found in the product (foreign matter).'); consequences.push('A quick rinse leaves dirt in the crevices. It caps the grade at B and export buyers reject it outright.'); }
+    if (b.quality < 60) { warnings.push(b.product === 'powder' ? 'Powder is dull and clumped.' : 'Slices are discoloured.'); consequences.push('Re-wetting by rain, slow drying or grinding damp ginger lowers the grade.'); }
+    if (b.packaging === 'bulk') consequences.push(`Jute sacks breathe: on wet days the ${b.product === 'powder' ? 'powder cakes' : 'ginger takes up moisture'}. Sealed bags are needed for Premium grade and export.`);
+    if (grade === 'Premium') consequences.push('Premium grade: excellent processing and sealed packaging. This is what export buyers pay most for.');
   } else if (b.quality < 60) {
     warnings.push('Rhizomes are shrivelled or bruised.');
     consequences.push('Fresh ginger loses quality every day in storage. Sell or process quickly.');
   }
   return {
-    title: `${b.product === 'fresh' ? 'Fresh' : 'Dried'} ginger batch #${b.id}`, grade,
+    title: `${PRODUCT_LABEL[b.product]} · batch #${b.id}`, grade,
     stats: [
       { label: 'Weight', value: `${Math.round(b.kg).toLocaleString()} kg`, ok: true },
       { label: 'Moisture', value: `${b.moisture.toFixed(1)}%`, ok: b.product === 'fresh' || b.moisture <= SAFE_MOISTURE },
       { label: 'Quality score', value: `${Math.round(b.quality)}/100`, ok: b.quality >= 60 },
-      { label: 'Days in storage', value: `${day - b.createdDay}`, ok: day - b.createdDay < 5 || b.product === 'dried' },
+      ...(b.product !== 'fresh' ? [{ label: 'Packaging', value: b.packaging ? PACKAGING[b.packaging].label : '-', ok: b.packaging === 'sealed' }] : []),
+      { label: 'Days in storage', value: `${day - b.createdDay}`, ok: day - b.createdDay < 5 || b.product !== 'fresh' },
     ],
     warnings, consequences,
   };
@@ -93,29 +114,49 @@ export type SaleCheck = { ok: true; price: number; revenue: number } | { ok: fal
 
 export function checkSale(s: GameState, b: Batch, buyer: Buyer): SaleCheck {
   const grade = gradeForBatch(b);
-  if (buyer.product !== b.product) return { ok: false, reason: `${buyer.name} only buys ${buyer.product} ginger.` };
+  if (buyer.product !== b.product) return { ok: false, reason: `${buyer.name} only buys ${PRODUCT_LABEL[buyer.product].toLowerCase()}.` };
   if (b.kg < buyer.minKg) return { ok: false, reason: `${buyer.name} needs at least ${buyer.minKg} kg.` };
   if (buyer.maxMoisture !== undefined && b.moisture > buyer.maxMoisture)
     return { ok: false, reason: `Rejected: moisture ${b.moisture.toFixed(1)}% is above their ${buyer.maxMoisture}% limit.` };
-  if (!gradeAtLeast(grade, buyer.minGrade)) return { ok: false, reason: `Rejected: they need Grade ${buyer.minGrade} or better; this is Grade ${grade}.` };
+  if (buyer.sealedOnly && b.packaging !== 'sealed') return { ok: false, reason: 'Rejected: they only take sealed, shelf-ready packaging.' };
+  if (!gradeAtLeast(grade, buyer.minGrade)) return { ok: false, reason: `Rejected: they need Grade ${buyer.minGrade} or better; this is ${gradeLabel(grade)}.` };
   const price = s.market[b.product] * buyer.priceMult * GRADE_MULT[grade];
   return { ok: true, price, revenue: Math.round(price * b.kg) };
 }
 
-export interface ValueOption { id: 'sellFresh' | 'dry'; label: string; cost: number; revenue: number; net: number; risk: 'Low' | 'Medium' | 'Higher'; detail: string; }
+export interface ValueOption {
+  id: 'sellFresh' | 'dry' | 'powder'; label: string; cost: number; revenue: number; net: number;
+  risk: 'Low' | 'Medium' | 'Higher'; detail: string; locked?: string;
+}
 
-/** The core "sell now or add value?" comparison for a fresh batch. Projections, not promises. */
+const bestMult = (product: 'dried' | 'powder', grade: QualityGrade, sealed: boolean) =>
+  Math.max(0, ...BUYERS.filter(x => x.product === product && gradeAtLeast(grade, x.minGrade) && (!x.sealedOnly || sealed)).map(x => x.priceMult));
+
+/**
+ * The central "sell now or add value?" decision for a fresh batch: fresh vs dried vs powder.
+ * Projections assume a thorough wash, standard sort, peeled slices and good drying weather.
+ */
 export function valueOptions(s: GameState, b: Batch): ValueOption[] {
   if (b.product !== 'fresh') return [];
   const bestFresh = Math.max(0, ...BUYERS.map(x => checkSale(s, b, x)).map(r => (r.ok ? r.revenue : 0)));
-  const dryKg = (b.kg * (1 - b.moisture / 100)) / (1 - 10 / 100);
-  const dryCost = Math.round(b.kg * DRYING_COST_PER_KG);
-  const dryGrade = gradeForBatch({ product: 'dried', quality: b.quality - 3, moisture: 10 });
-  const bestDriedMult = Math.max(...BUYERS.filter(x => x.product === 'dried' && gradeAtLeast(dryGrade, x.minGrade)).map(x => x.priceMult));
-  const dryRevenue = Math.round(dryKg * s.market.dried * GRADE_MULT[dryGrade] * bestDriedMult);
+  const keptKg = b.kg * SORT.standard.keep;
+  const prepCost = b.kg * (DRYING_COST_PER_KG + WASH.thorough.costPerKg + SORT.standard.costPerKg + CUT.sliced.costPerKg);
+  const quality = Math.min(100, b.quality + SORT.standard.quality + CUT.sliced.quality - 3);
+  const dryKg = (keptKg * (1 - b.moisture / 100) * CUT.sliced.dryMatter) / 0.9;
+  const dryGrade = gradeForBatch({ product: 'dried', quality, moisture: 10, packaging: 'bulk' });
+  const dryCost = Math.round(prepCost + dryKg * PACKAGING.bulk.costPerKg);
+  const dryRevenue = Math.round(dryKg * s.market.dried * GRADE_MULT[dryGrade] * bestMult('dried', dryGrade, false));
+  const powderKg = dryKg * GRIND_YIELD;
+  const powderGrade = gradeForBatch({ product: 'powder', quality: quality - 2, moisture: 9, packaging: 'sealed' });
+  const powderCost = Math.round(prepCost + dryKg * GRIND_COST_PER_KG + powderKg * PACKAGING.sealed.costPerKg);
+  const powderRevenue = Math.round(powderKg * s.market.powder * GRADE_MULT[powderGrade] * bestMult('powder', powderGrade, true));
   return [
-    { id: 'sellFresh', label: 'Sell fresh', cost: 0, revenue: bestFresh, net: bestFresh, risk: 'Low', detail: 'Cash today. Quality keeps falling while you wait.' },
-    { id: 'dry', label: 'Sun-dry', cost: dryCost, revenue: dryRevenue, net: dryRevenue - dryCost, risk: 'Medium',
-      detail: `≈${Math.round(dryKg)} kg at 10% moisture after ~5 dry days, projected Grade ${dryGrade} (${money(dryRevenue)}). Rain on uncovered racks lowers the grade.` },
+    { id: 'sellFresh', label: 'Sell fresh', cost: 0, revenue: bestFresh, net: bestFresh, risk: 'Low', detail: 'Cash today, no processing. Quality keeps falling while you wait.' },
+    { id: 'dry', label: 'Dry', cost: dryCost, revenue: dryRevenue, net: dryRevenue - dryCost, risk: 'Medium',
+      detail: `≈${Math.round(dryKg)} kg dried, ${gradeLabel(dryGrade)}. Needs ~5 dry days; rain on open racks lowers the grade.` },
+    { id: 'powder', label: 'Ginger powder', cost: powderCost, revenue: powderRevenue, net: powderRevenue - powderCost, risk: 'Higher',
+      detail: `≈${Math.round(powderKg)} kg powder, ${gradeLabel(powderGrade)}, sealed. Most value, most cost, and every stage has to go right.`,
+      locked: s.upgrades.mill ? undefined : 'Needs a hammer mill (Business)' },
   ];
 }
+

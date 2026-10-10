@@ -50,7 +50,7 @@ function Crops({ p }: { p: PlotState }) {
   );
 }
 
-const FX_COLORS: Record<Fx['kind'], string | null> = { water: '#6fb7e8', fertilize: '#f2f0e6', treat: '#9be07a', prepare: '#7a5a3a', harvest: '#d9b56a', plant: '#7a5a3a', inspect: null, pump: null };
+const FX_COLORS: Record<Fx['kind'], string | null> = { water: '#6fb7e8', fertilize: '#f2f0e6', treat: '#9be07a', prepare: '#7a5a3a', harvest: '#d9b56a', plant: '#7a5a3a', inspect: null, pump: null, process: null, grind: null, ship: null };
 const FX_COUNT = 24;
 
 /** A short particle burst over a plot when the player works it. */

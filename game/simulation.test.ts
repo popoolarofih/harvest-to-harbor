@@ -34,7 +34,7 @@ describe('planting choices', () => {
     expect(ridged.plots[12].ridged).toBe(true);
   });
   it('seed tier sets cost and needs prepared soil', () => {
-    let s = initialState();
+    let s = { ...initialState(), level: 2 };
     expect(plantPlot(s, 0, 'certified').plots[0].status).toBe('empty');
     s = preparePlot(s, 0);
     const planted = plantPlot(s, 0, 'certified');
@@ -161,7 +161,7 @@ describe('selling and processing', () => {
     s = finishDrying(s, s.dryingJobs[0].id);
     const dried = s.batches.find(b => b.product === 'dried')!;
     expect(dried.moisture).toBeLessThanOrEqual(12);
-    expect(dried.kg).toBeGreaterThan(200);
+    expect(dried.kg).toBeGreaterThan(180);
     expect(dried.kg).toBeLessThan(250);
     expect(gradeForBatch(dried)).toBe('A');
   });
@@ -225,7 +225,7 @@ describe('npc advice', () => {
   });
   it('Amaka warns against bagging damp ginger and compares sell vs dry', async () => {
     const { npcAdvice } = await import('./simulation');
-    const s = { ...initialState(), batches: [freshBatch()], dryingJobs: [{ id: 3, freshKg: 500, dryMatterKg: 100, moisture: 20, quality: 80, days: 4, covered: false }] };
+    const s = { ...initialState(), batches: [freshBatch()], dryingJobs: [{ id: 3, freshKg: 500, dryMatterKg: 100, moisture: 20, quality: 80, days: 4, covered: false, rate: 1, soiled: false }] };
     const tips = npcAdvice(s, 'amaka');
     expect(tips[0]).toMatch(/20\.0% moisture/);
     expect(tips.some(t => /Drying costs/.test(t))).toBe(true);
@@ -233,5 +233,257 @@ describe('npc advice', () => {
   it('every NPC always has something to say', async () => {
     const { npcAdvice } = await import('./simulation');
     for (const id of ['baba', 'amaka', 'chinedu'] as const) expect(npcAdvice(initialState(), id).length).toBeGreaterThan(0);
+  });
+});
+
+describe('processing chain', () => {
+  const withFresh = (patch: Partial<Batch> = {}) => ({ ...initialState(), batches: [freshBatch(patch)] });
+  it('strict sorting keeps fewer kilos but raises quality', async () => {
+    const { prepPlan } = await import('./simulation');
+    const b = freshBatch();
+    const none = prepPlan(b, { wash: 'thorough', sort: 'none', cut: 'sliced' }), strict = prepPlan(b, { wash: 'thorough', sort: 'strict', cut: 'sliced' });
+    expect(strict.keptKg).toBeLessThan(none.keptKg);
+    expect(strict.quality).toBeGreaterThan(none.quality);
+  });
+  it('a thorough wash needs tank water; a rinse leaves soil that caps the grade at B', async () => {
+    const { startProcessing, finishDrying } = await import('./simulation');
+    expect(startProcessing({ ...withFresh(), water: 0 }, 99).dryingJobs).toHaveLength(0);
+    let s = startProcessing(withFresh({ quality: 95 }), 99, { wash: 'rinse', sort: 'strict', cut: 'sliced' });
+    expect(s.water).toBe(4_000);
+    s = { ...s, dryingJobs: s.dryingJobs.map(j => ({ ...j, moisture: 9 })) };
+    s = finishDrying(s, s.dryingJobs[0].id, 'sealed');
+    const dried = s.batches.find(b => b.product === 'dried')!;
+    expect(dried.soiled).toBe(true);
+    expect(gradeForBatch(dried)).toBe('B');
+    expect(s.lastInspection?.warnings.join(' ')).toMatch(/foreign matter/);
+  });
+  it('peeled slices dry faster than split rhizomes', async () => {
+    const { startProcessing } = await import('./simulation');
+    const sliced = advanceDay(withWeather(startProcessing(withFresh(), 99, { wash: 'thorough', sort: 'standard', cut: 'sliced' }), 'sunny'));
+    const split = advanceDay(withWeather(startProcessing(withFresh(), 99, { wash: 'thorough', sort: 'standard', cut: 'split' }), 'sunny'));
+    expect(sliced.dryingJobs[0].moisture).toBeLessThan(split.dryingJobs[0].moisture);
+  });
+  it('excellent processing in sealed bags is Premium; the same ginger in jute is Grade A', () => {
+    const base = { product: 'dried' as const, quality: 94, moisture: 9 };
+    expect(gradeForBatch({ ...base, packaging: 'sealed' })).toBe('Premium');
+    expect(gradeForBatch({ ...base, packaging: 'bulk' })).toBe('A');
+  });
+  it('jute-bagged stock takes up moisture on wet days; sealed bags do not', () => {
+    const s = { ...initialState(), batches: [
+      { id: 1, product: 'dried' as const, kg: 100, quality: 90, moisture: 10, createdDay: 1, packaging: 'bulk' as const },
+      { id: 2, product: 'dried' as const, kg: 100, quality: 90, moisture: 10, createdDay: 1, packaging: 'sealed' as const },
+    ] };
+    const next = advanceDay(withWeather(s, 'heavyRain'));
+    expect(next.batches[0].moisture).toBeGreaterThan(10);
+    expect(next.batches[1].moisture).toBe(10);
+  });
+  it('the solar dryer stops rain re-wetting the racks', async () => {
+    const { startProcessing } = await import('./simulation');
+    const s = startProcessing(withFresh(), 99);
+    const open = advanceDay(withWeather(s, 'heavyRain'));
+    const solar = advanceDay(withWeather({ ...s, upgrades: { ...s.upgrades, solarDryer: true } }, 'heavyRain'));
+    expect(solar.dryingJobs[0].moisture).toBeLessThan(open.dryingJobs[0].moisture);
+    expect(solar.dryingJobs[0].quality).toBeGreaterThan(open.dryingJobs[0].quality);
+  });
+  it('racks take what fits and leave the rest of a big batch in store', async () => {
+    const { startProcessing, DRYING_RACK_KG } = await import('./simulation');
+    const s = startProcessing(withFresh({ kg: 2_000 }), 99);
+    expect(s.batches[0].kg).toBeCloseTo(2_000 - DRYING_RACK_KG);
+    expect(s.stats.processedKg).toBe(DRYING_RACK_KG);
+  });
+  it('grinding needs a mill, and grinding damp ginger cakes the powder', async () => {
+    const { grindBatch } = await import('./simulation');
+    const dried = (moisture: number): GameState => ({ ...initialState(), batches: [{ id: 5, product: 'dried', kg: 200, quality: 90, moisture, createdDay: 1, packaging: 'bulk' }] });
+    expect(grindBatch(dried(9), 5).batches[0].product).toBe('dried');
+    const withMill = (s: GameState): GameState => ({ ...s, upgrades: { ...s.upgrades, mill: true } });
+    const good = grindBatch(withMill(dried(9)), 5), damp = grindBatch(withMill(dried(13)), 5);
+    expect(good.batches[0].product).toBe('powder');
+    expect(good.batches[0].kg).toBeCloseTo(194);
+    expect(damp.batches[0].quality).toBeLessThan(good.batches[0].quality - 10);
+    expect(damp.lastInspection?.warnings[0]).toMatch(/caked/);
+  });
+  it('the supermarket only takes sealed powder', () => {
+    const supermarket = BUYERS.find(b => b.id === 'supermarket')!;
+    const powder = (packaging: 'bulk' | 'sealed'): Batch => ({ id: 1, product: 'powder', kg: 100, quality: 90, moisture: 8, createdDay: 1, packaging });
+    expect(checkSale(initialState(), powder('bulk'), supermarket).ok).toBe(false);
+    expect(checkSale(initialState(), powder('sealed'), supermarket).ok).toBe(true);
+  });
+  it('value options compare fresh, dried and powder, with powder locked until there is a mill', () => {
+    const opts = valueOptions(initialState(), freshBatch({ kg: 2_000, quality: 80 }));
+    expect(opts.map(o => o.id)).toEqual(['sellFresh', 'dry', 'powder']);
+    expect(opts[2].locked).toBeTruthy();
+    expect(opts[2].revenue).toBeGreaterThan(opts[1].revenue);
+    expect(opts[1].revenue).toBeGreaterThan(opts[0].revenue);
+  });
+});
+
+describe('Farm to Fortune campaign', () => {
+  const at = async (id: string, patch: Partial<GameState> = {}): Promise<GameState> => {
+    const { CAMPAIGN } = await import('./simulation');
+    const idx = CAMPAIGN.findIndex(m => m.id === id);
+    const s = initialState();
+    return { ...s, missions: s.missions.map((m, i) => (i < idx ? { ...m, complete: true, progress: m.target } : m)), story: null, ...patch };
+  };
+  it('opens with Baba Musa, and talking to him starts the planting mission', async () => {
+    const { talkTo, currentMission } = await import('./simulation');
+    const s = initialState();
+    expect(s.story?.speaker).toBe('baba');
+    const next = talkTo(s, 'baba');
+    expect(next.missions[0].complete).toBe(true);
+    expect(currentMission(next)?.id).toBe('plant');
+    expect(next.story?.title).toMatch(/Mission 2/);
+  });
+  it('mission 3 schedules a real storm and rewards a protected farm more', async () => {
+    const { checkCampaign } = await import('./simulation');
+    let s = await at('plant');
+    for (const id of [0, 1, 2, 12]) { s = preparePlot(s, id, 'clear'); s = plantPlot(s, id, 'improved'); }
+    s = checkCampaign(s);
+    expect(s.forecast[2].weather).toBe('storm');
+    expect(s.weatherQueue[2]).toBe('storm');
+    const run = (start: GameState) => { let x = start; for (let i = 0; i < 3; i++) x = advanceDay(x); return x; };
+    const exposed = run(s), insured = run({ ...s, upgrades: { ...s.upgrades, insurance: true } });
+    expect(exposed.flags.stormOutcome).toBe('exposed');
+    expect(insured.flags.stormOutcome).toBe('protected');
+    expect(insured.missions[2].complete && exposed.missions[2].complete).toBe(true);
+    expect(insured.log.some(l => l.text.includes('A storm is coming (+₦60,000)'))).toBe(true);
+    expect(exposed.log.some(l => l.text.includes('act on the forecast'))).toBe(true);
+  });
+  it('the first-offer mission completes whether you sell fresh or process', async () => {
+    const { checkCampaign, startProcessing, currentMission } = await import('./simulation');
+    const base = checkCampaign(await at('offer', { batches: [freshBatch({ kg: 600 })] }));
+    expect(currentMission(checkCampaign(sellBatch(base, 99, 'aggregator')))?.id).toBe('drying');
+    expect(currentMission(checkCampaign(startProcessing(base, 99)))?.id).toBe('drying');
+  });
+  it('meeting Amaka creates the London contract; the lot counts only sealed, dry, Grade A+ stock; dispatching it ends the campaign', async () => {
+    const { checkCampaign, talkTo, dispatchContract, eligibleKg, currentMission } = await import('./simulation');
+    const good: Batch = { id: 1, product: 'dried', kg: 300, quality: 92, moisture: 9, createdDay: 1, packaging: 'sealed' };
+    let s = talkTo(await at('buyer', { cash: 2_000_000, batches: [
+      good, { ...good, id: 2, kg: 150, product: 'powder' }, { ...good, id: 3, packaging: 'bulk' }, { ...good, id: 4, moisture: 14 },
+    ] }), 'amaka');
+    const london = s.contracts.find(c => c.campaign)!;
+    expect(london.status).toBe('active');
+    expect(eligibleKg(s, london)).toBe(450);
+    s = checkCampaign(s);
+    expect(currentMission(s)?.id).toBe('ship');
+    const shipped = checkCampaign(dispatchContract(s, london.id));
+    expect(shipped.batches.find(b => b.id === 2)?.kg).toBe(50); // 400 taken: best quality first, last batch split
+    expect(shipped.shipments).toHaveLength(1);
+    expect(currentMission(shipped)).toBeNull();
+    expect(shipped.story?.title).toMatch(/complete/);
+  });
+});
+
+describe('contracts and the export journey', () => {
+  const exportState = (patch: Partial<GameState> = {}): GameState => {
+    const s = { ...initialState(), cash: 3_000_000, flags: { ...initialState().flags, exportUnlocked: true } };
+    return { ...s, contracts: [{ ...campaignContractFor(s), campaign: false }], batches: [{ id: 50, product: 'dried', kg: 500, quality: 92, moisture: 9, createdDay: 1, packaging: 'sealed' }], ...patch };
+  };
+  let campaignContractFor: (s: GameState) => GameState['contracts'][number];
+  it('loads helpers', async () => { ({ campaignContract: campaignContractFor } = await import('./simulation')); });
+
+  it('a shipment goes road → port → sea → delivered, then the buyer pays in dollars at the day\'s rate', async () => {
+    const { dispatchContract, contractValue } = await import('./simulation');
+    let s = dispatchContract(exportState(), 1);
+    expect(s.shipments[0].stage).toBe('road');
+    const seen = new Set<string>();
+    for (let i = 0; i < 40 && s.shipments[0].stage !== 'paid'; i++) { s = advanceDay(s); seen.add(s.shipments[0].stage); }
+    expect([...seen]).toEqual(expect.arrayContaining(['port', 'sea', 'paid']));
+    const c = s.contracts[0];
+    expect(c.status).toBe('paid');
+    expect(s.shipments[0].payout).toBeGreaterThan(contractValue(s, c) * 0.6);
+  });
+  it('dispatch is refused without enough eligible stock or cash for logistics', async () => {
+    const { dispatchContract } = await import('./simulation');
+    expect(dispatchContract(exportState({ batches: [] }), 1).shipments).toHaveLength(0);
+    expect(dispatchContract(exportState({ cash: 1_000 }), 1).shipments).toHaveLength(0);
+  });
+  it('premium haulage and cargo insurance are level unlocks', async () => {
+    const { dispatchContract } = await import('./simulation');
+    expect(dispatchContract(exportState(), 1, 'fleet').shipments).toHaveLength(0);
+    expect(dispatchContract(exportState({ level: 20 }), 1, 'fleet', true).shipments[0].insured).toBe(true);
+  });
+  it('a contract with nothing shipped 10 days past its deadline fails and costs reputation', async () => {
+    const s = exportState();
+    const late = advanceDay({ ...s, day: s.contracts[0].deadlineDay + 10 });
+    expect(late.contracts[0].status).toBe('failed');
+    expect(late.reputation).toBeLessThan(s.reputation);
+  });
+  it('offers appear on the board once forward contracts unlock, and accepting an advance-terms contract pays 30% up front', async () => {
+    const { acceptContract } = await import('./simulation');
+    let s: GameState = { ...initialState(), level: 3 };
+    for (let i = 0; i < 40 && !s.contracts.length; i++) s = advanceDay(s);
+    expect(s.contracts[0]?.status).toBe('offered');
+    const advance = { ...s, contracts: [{ ...s.contracts[0], terms: 'advance' as const }] };
+    const accepted = acceptContract(advance, advance.contracts[0].id);
+    expect(accepted.contracts[0].status).toBe('active');
+    expect(accepted.cash).toBeGreaterThan(advance.cash);
+  });
+});
+
+describe('loans and cash flow', () => {
+  it('bank loans need Level 5, accrue interest and are collected when due', async () => {
+    const { takeLoan } = await import('./simulation');
+    expect(takeLoan(initialState(), 0).loans).toHaveLength(0);
+    let s = takeLoan({ ...initialState(), level: 5 }, 0);
+    expect(s.cash).toBe(1_000_000);
+    s = advanceDay(s);
+    expect(s.loans[0].balance).toBeGreaterThan(500_000);
+    s = advanceDay({ ...s, day: s.loans[0].dueDay });
+    expect(s.loans).toHaveLength(0);
+    expect(s.cash).toBeLessThan(500_000);
+  });
+  it('a loan that cannot be repaid defaults and blocks new credit', async () => {
+    const { takeLoan } = await import('./simulation');
+    let s = takeLoan({ ...initialState(), level: 5 }, 0);
+    s = advanceDay({ ...s, cash: 10_000, day: s.loans[0].dueDay });
+    expect(s.loans[0].defaulted).toBe(true);
+    expect(s.creditBlocked).toBe(true);
+    expect(takeLoan(s, 0).loans).toHaveLength(1);
+  });
+  it('equipment financing installs now with 25% down', async () => {
+    const { financeUpgrade, UPGRADES } = await import('./simulation');
+    const s = financeUpgrade({ ...initialState(), level: 15, cash: 300_000 }, 'factory');
+    expect(s.upgrades.factory).toBe(true);
+    expect(s.cash).toBe(300_000 - UPGRADES.factory.cost * 0.25);
+    expect(s.loans[0].balance).toBe(UPGRADES.factory.cost * 0.75);
+  });
+  it('the cash forecast includes wages, maintenance and loan repayments', async () => {
+    const { cashForecast, takeLoan } = await import('./simulation');
+    const s = takeLoan({ ...initialState(), level: 5, workers: 2, upgrades: { ...initialState().upgrades, mill: true } }, 0);
+    const f = cashForecast(s, 60);
+    expect(f[1].cash).toBe(s.cash - 2 * 3_000 - 1_500);
+    expect(f.some(p => p.note?.includes('due'))).toBe(true);
+  });
+});
+
+describe('levels and unlocks', () => {
+  it('XP crosses levels, names titles and lists what was unlocked', async () => {
+    const { addXp, xpForLevel } = await import('./simulation');
+    const s = addXp(initialState(), xpForLevel(5));
+    expect(s.level).toBe(5);
+    expect(s.levelUp?.title).toBe('Commercial Farmer');
+    expect(s.levelUp?.unlocks).toEqual(expect.arrayContaining(['Certified seed', 'Land expansion', 'Bank loans']));
+  });
+  it('locked features are refused until their level', async () => {
+    const { buyUpgrade } = await import('./simulation');
+    const rich = { ...initialState(), cash: 5_000_000 };
+    expect(buyUpgrade(rich, 'mill').upgrades.mill).toBe(false);
+    expect(buyUpgrade({ ...rich, level: 6 }, 'mill').upgrades.mill).toBe(true);
+    expect(plantPlot(preparePlot(rich, 0), 0, 'certified').plots[0].status).toBe('prepared');
+  });
+  it('leasing land at Level 5 adds 8 plots', async () => {
+    const { buyUpgrade } = await import('./simulation');
+    const s = buyUpgrade({ ...initialState(), level: 5 }, 'land');
+    expect(s.plots).toHaveLength(24);
+    expect(s.plots[16]).toMatchObject({ id: 16, x: 4, z: 0 });
+  });
+  it('the Processing Factory doubles rack capacity', async () => {
+    const { rackCapacity, buyUpgrade, DRYING_RACK_KG } = await import('./simulation');
+    expect(rackCapacity(buyUpgrade({ ...initialState(), level: 10, cash: 2_000_000 }, 'factory'))).toBe(DRYING_RACK_KG * 2);
+  });
+  it('the worker cap grows with level', () => {
+    let s = initialState();
+    for (let i = 0; i < 4; i++) s = hireWorker(s);
+    expect(s.workers).toBe(2);
   });
 });

@@ -1,12 +1,41 @@
-# Harvest to Harbor: Nigeria - MVP v0.3
+# Harvest to Harbor: Nigeria - MVP v0.5
 
 A browser-based agricultural simulation built with Next.js, React, TypeScript, React Three Fiber and Zustand.
 
 ## Current playable loop
 
-Pick a plot (upland or stream-bottom) → clear or ridge the soil → choose seed quality → water, fertilize, inspect and treat through the season while reading a 5-day forecast → decide when to harvest (early, on time, or wait for more yield at rising risk) → sell fresh to one of several buyers, or wash, slice and sun-dry it → inspect moisture and grade → sell dried ginger → manage wages, insurance and upgrades.
+Pick a plot (upland or stream-bottom) → clear or ridge the soil → choose seed quality → water, fertilize, inspect and treat through the season while reading a 5-day forecast → decide when to harvest (early, on time, or wait for more yield at rising risk) → **sell fresh, dry, or make powder** → process → inspect the quality → sell locally or ship an export lot to London via Lagos → manage wages, insurance, equipment and cash flow.
 
 Every action trades off cash, energy (labour) and risk. Problems such as pests, leaf spot and soft rot start hidden and only show up through inspection or once the damage is visible.
+
+### Processing chain
+
+FRESH → WASH → SORT → SLICE → DRY → GRIND → QC → PACK. Each stage is a choice that affects cost, kilos and grade:
+
+- **Wash**: quick rinse (free, but soil left behind caps the grade at B) or thorough wash (uses tank water)
+- **Sort**: none / standard / strict (fewer kilos, higher quality)
+- **Slice**: split unpeeled (cheap, slow to dry) or peeled slices (dries faster, better grade)
+- **Dry**: open racks (cover them before rain) or a solar tunnel dryer upgrade
+- **Grind**: hammer mill upgrade; grinding above 10% moisture cakes the powder
+- **Pack**: jute sacks (cheap, pick up moisture) or sealed bags (needed for Premium grade and export)
+
+Grades: C, B, A, and **Premium** (excellent processing *and* sealed packaging). Every fresh batch shows a sell-fresh / dry / powder comparison with cost, projected revenue and risk.
+
+### Farm to Fortune campaign
+
+### Contracts, logistics and money
+
+- **Trade board**: buyers post offers with volume, minimum grade, deadline, late penalty and payment terms (30% advance / on delivery / 30 days after delivery). Export contracts are priced in US dollars, so the naira exchange rate moves your revenue. Overdue contracts are cancelled (advance refunded, reputation lost).
+- **Export journey**: dispatch loads the truck, which drives Kafanchan → Lagos (breakdowns, checkpoints), clears Apapa port (congestion, daily storage fees), then sails to the buyer's port (possible cargo damage). Choose standard haulage or Chinedu's fleet and optional cargo insurance. Follow it on the journey map.
+- **Money**: bank loans and equipment financing with interest and due dates; defaults add a penalty and freeze credit. Daily wages, maintenance and premiums. A 30-day cash-flow forecast warns when you will run out of cash before a payment lands.
+
+### Career levels
+
+Level 1 Smallholder → 5 Commercial Farmer → 10 Agricultural Processor → 20 Agribusiness Owner → 30 Exporter → 50 International Agricultural Supplier. Each level unlocks something concrete (certified seed, forward contracts, solar dryer, land lease +8 plots, bank loans, hammer mill, Processing Factory, equipment financing, premium haulage, cargo insurance, European/Gulf/American buyers, your own brand) and raises the staff limit. See `game/levels.ts`.
+
+### Farm to Fortune campaign
+
+Ten story missions given in person by Baba Musa, Amaka and Chinedu (a gold **!** marks who has your next mission): meet Baba Musa → plant → a scheduled storm you must prepare for → first harvest → the first offer (sell or process) → the drying lesson → build a processing facility → an international buyer → build a 400 kg export lot → ship your first container. Progress is measured from game state (`game/campaign.ts`), so missions react to whatever you actually do.
 
 ## Playing
 
@@ -35,6 +64,10 @@ Weather is visible in the world: rain and storm intensity, drifting clouds, ligh
   - `simulation.ts`: public barrel used by the UI
 - `stores/gameStore.ts` wraps engine functions as Zustand actions and holds UI-only state (selected plot, dismissed report).
   - `advice.ts`: what the NPCs say, derived from game state
+  - `contracts.ts`: offers, signing, dispatch and the daily shipment journey with its risks and payment
+  - `finance.ts`: loans, equipment financing, maintenance and the cash-flow forecast
+  - `levels.ts`: XP curve, titles and unlocks
+  - `missions.ts` / `campaign.ts`: the campaign's mission data, and the logic that measures progress, starts missions (e.g. schedules the storm) and pays rewards. The store runs `checkCampaign` after every action; `advanceDay` runs it at the end of each day.
 - `stores/gameStore.ts` also holds world-interaction state: nearby target, open panel, NPC conversation, and short-lived `fx` cues the scene animates.
 - `components/` renders: `FarmScene.tsx` composes `world/` (layout, models, buildings, nature, field, actors, weather) and `hud/` panels. The R3F canvas is client-only via `next/dynamic` with `ssr: false`.
   - Per-frame player movement lives in `world/playerState.ts`, outside React, so walking doesn't re-render the tree.

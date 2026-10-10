@@ -1,9 +1,9 @@
 import { SAFE_MOISTURE, TREATMENTS, WEATHER_INFO } from './config';
 import { valueOptions } from './quality';
 import { hasEvent, money, plotName, storedKg, warehouseCapacity } from './state';
-import type { GameState } from './types';
+import type { GameState, NpcId } from './types';
 
-export type NpcId = 'baba' | 'amaka' | 'chinedu';
+export type { NpcId };
 
 export const NPCS: Record<NpcId, { name: string; role: string; greeting: string }> = {
   baba: { name: 'Baba Musa', role: 'Experienced farmer', greeting: 'Ah, my friend. Walk the beds every few days; the soil tells you what it needs.' },

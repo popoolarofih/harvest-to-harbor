@@ -4,7 +4,8 @@ import { useFrame } from '@react-three/fiber';
 import { useMemo, useRef } from 'react';
 import type { ShaderMaterial } from 'three';
 import { createRng } from '../../game/rng';
-import { FARM_BOUNDS, GATE, ROAD_X, STREAM_Z } from './layout';
+import { useGameStore } from '../../stores/gameStore';
+import { FARM_BOUNDS, GATE, PLOT_SPACING, ROAD_X, STREAM_Z } from './layout';
 import { Model, type ModelId } from './models';
 
 const streamShader = {
@@ -40,13 +41,21 @@ function Stream() {
 }
 
 function Ground() {
+  const leased = useGameStore(s => s.upgrades.landLeased > 0);
+  // The tilled field grows east when the extra hectare is leased.
+  const fieldW = 10.5 + (leased ? 2 * PLOT_SPACING : 0), fieldX = leased ? PLOT_SPACING : 0;
   return (
     <group>
       <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow><planeGeometry args={[160, 160]} /><meshStandardMaterial color="#6d7a3e" roughness={1} /></mesh>
       {/* Compound yard: bare laterite earth, swept clean. */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[3, 0.01, -9]} receiveShadow><planeGeometry args={[24, 14]} /><meshStandardMaterial color="#a2734b" roughness={1} /></mesh>
       {/* Field: tilled darker soil around the beds. */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.012, 0]} receiveShadow><planeGeometry args={[10.5, 10.5]} /><meshStandardMaterial color="#5e4630" roughness={1} /></mesh>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[fieldX, 0.012, 0]} receiveShadow><planeGeometry args={[fieldW, 10.5]} /><meshStandardMaterial color="#5e4630" roughness={1} /></mesh>
+      {!leased && <group position={[6.6, 0, -4.6]}>
+        <mesh position={[0, 0.7, 0]}><boxGeometry args={[0.08, 1.4, 0.08]} /><meshStandardMaterial color="#5a4330" /></mesh>
+        <mesh position={[0, 1.35, 0]}><boxGeometry args={[1.3, 0.45, 0.05]} /><meshStandardMaterial color="#efe3c4" /></mesh>
+        <Text position={[0, 1.35, 0.03]} fontSize={0.12} color="#5a2d10">LAND FOR LEASE · LV 5</Text>
+      </group>}
       {/* Red laterite road to Kafanchan, and the track through the gate. */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[ROAD_X, 0.015, 0]} receiveShadow><planeGeometry args={[3.4, 160]} /><meshStandardMaterial color="#9b5534" roughness={1} /></mesh>
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[(ROAD_X + FARM_BOUNDS.minX) / 2 + 1, 0.016, (GATE.z0 + GATE.z1) / 2]}><planeGeometry args={[6, 2.6]} /><meshStandardMaterial color="#9b5534" roughness={1} /></mesh>

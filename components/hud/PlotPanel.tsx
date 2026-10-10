@@ -1,7 +1,7 @@
 'use client';
 import {
   ENERGY, FERTILIZER_COST, PREP, SEEDS, TREATMENTS, canHarvest, effectiveDrainage, expectedQuality, expectedYieldKg,
-  gradeForBatch, isWet, money, plotName,
+  gradeForBatch, isUnlocked, isWet, lockedReason, money, plotName,
 } from '../../game/simulation';
 import type { PrepMethod, SeedTier } from '../../game/types';
 import { useGameStore } from '../../stores/gameStore';
@@ -52,8 +52,8 @@ export default function PlotPanel() {
 
       {p.status === 'prepared' && <div className="choices">
         {(Object.keys(SEEDS) as SeedTier[]).map(t => (
-          <button key={t} className="choice" onClick={() => s.plant(p.id, t)} disabled={s.cash < SEEDS[t].cost || s.energy < ENERGY.plant}>
-            <strong>{SEEDS[t].label}</strong><span>{money(SEEDS[t].cost)} · {Math.round(SEEDS[t].germination * 100)}% emergence</span><small>{SEEDS[t].blurb}</small>
+          <button key={t} className="choice" onClick={() => s.plant(p.id, t)} disabled={s.cash < SEEDS[t].cost || s.energy < ENERGY.plant || (t === 'certified' && !isUnlocked(s, 'certifiedSeed'))}>
+            <strong>{t === 'certified' && !isUnlocked(s, 'certifiedSeed') ? `🔒 ${SEEDS[t].label} (${lockedReason(s, 'certifiedSeed')})` : SEEDS[t].label}</strong><span>{money(SEEDS[t].cost)} · {Math.round(SEEDS[t].germination * 100)}% emergence</span><small>{SEEDS[t].blurb}</small>
           </button>
         ))}
       </div>}

@@ -1,7 +1,10 @@
 import {
-  BASE_PRICES, BASE_YIELD_KG, DRY_FLOOR_MOISTURE, INSURANCE_COVER, INSURANCE_PREMIUM, SAFE_MOISTURE, SEEDS, TREATMENTS,
+  BASE_PRICES, BASE_YIELD_KG, FX_BASE, DRY_FLOOR_MOISTURE, INSURANCE_COVER, INSURANCE_PREMIUM, SAFE_MOISTURE, SEEDS, TREATMENTS,
   WAGE_PER_DAY, WATER_MOISTURE_GAIN, WATER_PER_PLOT, WEATHER_INFO,
 } from './config';
+import { checkCampaign, judgeStorm } from './campaign';
+import { tickContracts, tickShipments } from './contracts';
+import { maintenanceCost, tickLoans } from './finance';
 import { createRng, type Rng } from './rng';
 import {
   addXp, clamp, effectiveDrainage, hasEvent, log, maxEnergy, money, plotName, storedKg, tankCapacity, warehouseCapacity,
@@ -23,7 +26,7 @@ export function advanceDay(s: GameState): GameState {
   const info = WEATHER_INFO[weather];
   lines.push({ text: `${info.icon} ${info.label} today.`, severity: weather === 'storm' || weather === 'heatwave' ? 'warning' : 'info' });
 
-  let st: GameState = { ...s, day: s.day + 1, weather, weatherQueue };
+  let st: GameState = judgeStorm({ ...s, day: s.day + 1, weather, weatherQueue });
   st = tickEvents(st, rng, lines);
   st = updateMarket(st, rng, weather);
   st = collectRainwater(st, weather, lines);
@@ -32,13 +35,16 @@ export function advanceDay(s: GameState): GameState {
   st = dryRacks(st, weather, lines);
   const paid = payBills(st, grown.insuredLoss, lines);
   st = paid.state;
+  st = tickLoans(st, lines);
+  st = tickContracts(st, rng, lines);
+  st = tickShipments(st, rng, lines);
 
   const report = { day: st.day, weather, lines, wages: paid.wages, insurance: paid.premium, payouts: paid.payout };
   st = { ...st, forecast: buildForecast(rng, weatherQueue, st.day), rng: rng.state(), lastReport: report };
   st = { ...st, energy: maxEnergy(st) };
   st = log(st, ...lines.filter(l => l.severity !== 'info'));
   const headline = lines.find(l => l.severity === 'danger') ?? lines.find(l => l.severity === 'warning') ?? lines[0];
-  return addXp({ ...st, toast: `Day ${st.day}: ${headline.text}` }, 5);
+  return checkCampaign(addXp({ ...st, toast: `Day ${st.day}: ${headline.text}` }, 5));
 }
 
 function tickEvents(s: GameState, rng: Rng, lines: LogLine[]): GameState {
@@ -56,7 +62,7 @@ function tickEvents(s: GameState, rng: Rng, lines: LogLine[]): GameState {
   const has = (k: ActiveEvent['kind']) => events.some(e => e.kind === k);
   if (!has('priceCrash') && rng.chance(0.02)) {
     events.push({ kind: 'priceCrash', daysLeft: 5, magnitude: 0.7 });
-    market = { fresh: Math.round(market.fresh * 0.7), dried: Math.round(market.dried * 0.88) };
+    market = { fresh: Math.round(market.fresh * 0.7), dried: Math.round(market.dried * 0.88), powder: Math.round(market.powder * 0.93) };
     lines.push({ text: 'Price crash: a glut of fresh ginger hit the markets and fresh prices fell 30%. Dried ginger holds its value better.', severity: 'danger' });
   }
   if (!has('fuelSpike') && rng.chance(0.03)) {
@@ -80,9 +86,11 @@ function updateMarket(s: GameState, rng: Rng, weather: Weather): GameState {
     if (weather === 'storm' && product === 'fresh') p *= 1.03; // supply worries
     return Math.round(clamp(p, base * 0.5, base * 1.6));
   };
-  const market = { fresh: move('fresh'), dried: move('dried') };
+  const market = { fresh: move('fresh'), dried: move('dried'), powder: move('powder') };
+  // The naira drifts against the dollar, which moves the value of every export contract.
+  const fxRate = Math.round(clamp(s.fxRate + (FX_BASE - s.fxRate) * 0.05 + s.fxRate * rng.range(-0.012, 0.012), FX_BASE * 0.8, FX_BASE * 1.4));
   const priceHistory = [...s.priceHistory, { day: s.day, ...market }].slice(-PRICE_HISTORY_DAYS);
-  return { ...s, market, priceHistory };
+  return { ...s, market, fxRate, priceHistory };
 }
 
 function collectRainwater(s: GameState, weather: Weather, lines: LogLine[]): GameState {
@@ -129,7 +137,7 @@ function growPlots(s: GameState, rng: Rng, weather: Weather, lines: LogLine[]) {
     }
 
     let dh = 1;
-    if (p.moisture < 25) { dh -= 4; dry.push(plotName(p)); } else if (p.moisture < 35) dh -= 1;
+    if (p.moisture < 25) { dh -= 2.5; dry.push(plotName(p)); } else if (p.moisture < 35) dh -= 0.5;
     if (p.moisture > 90) { dh -= 6; waterlogged.push(plotName(p)); } else if (p.moisture > 82) dh -= 2;
     if (p.fertility < 20) dh -= 3;
     if (p.status === 'ready' && p.daysReady > 5) dh -= 2;
@@ -158,7 +166,9 @@ function growPlots(s: GameState, rng: Rng, weather: Weather, lines: LogLine[]) {
       if (rng.chance(total)) p.issue = { kind: rng.weighted(weights), severity: 10, detected: false };
     }
 
-    p.health = clamp(p.health + dh - weatherLoss, 0, 100);
+    // Borers and leaf spot cut yield; only soft rot (or neglect of water) actually destroys a bed.
+    const floor = p.issue && p.issue.kind !== 'rot' && p.moisture >= 25 ? 20 : 0;
+    p.health = clamp(p.health + dh - weatherLoss, Math.min(floor, p.health), 100);
     if (weatherLoss > 0 && s.upgrades.insurance) {
       const potentialKg = BASE_YIELD_KG * (p.germinated ? p.stand : seed.germination) * seed.yieldMult;
       insuredLoss += (weatherLoss / 100) * potentialKg * s.market.fresh;
@@ -200,7 +210,8 @@ function ageStock(s: GameState, weather: Weather, lines: LogLine[]): GameState {
       next.kg *= 0.992;
       next.quality -= (over ? 3.5 : 1.5) + (over && isWet(weather) ? 4 : 0);
     } else {
-      if (over && isWet(weather)) next.moisture += 1.5;
+      // Jute breathes: on wet days unsealed stock takes up moisture, much more if it's piled outside.
+      if (isWet(weather) && b.packaging !== 'sealed') next.moisture += (over ? 1.5 : 0) + (b.product === 'powder' ? 0.8 : 0.4);
       next.quality -= next.moisture > SAFE_MOISTURE ? (next.moisture - SAFE_MOISTURE) * 0.8 : 0.1;
       if (next.moisture > SAFE_MOISTURE) lines.push({ text: `Mould spreading in damp dried batch #${b.id} (${next.moisture.toFixed(1)}% moisture).`, severity: 'warning' });
     }
@@ -214,13 +225,16 @@ function ageStock(s: GameState, weather: Weather, lines: LogLine[]): GameState {
 }
 
 function dryRacks(s: GameState, weather: Weather, lines: LogLine[]): GameState {
-  const info = WEATHER_INFO[weather];
+  const info = WEATHER_INFO[weather], solar = s.upgrades.solarDryer;
   const dryingJobs = s.dryingJobs.map(j => {
     if (j.covered) return { ...j, days: j.days + 1, quality: j.quality - 0.3 };
-    const moisture = clamp(j.moisture + info.dryingMoisture, DRY_FLOOR_MOISTURE, 90);
-    if (isWet(weather)) lines.push({ text: `Rain soaked uncovered drying rack #${j.id}: moisture back up to ${moisture.toFixed(1)}%. Cover racks when rain is forecast.`, severity: 'warning' });
+    // The solar tunnel keeps rain off and traps heat, so it keeps drying slowly even on wet days.
+    const change = info.dryingMoisture < 0 ? info.dryingMoisture * j.rate * (solar ? 1.3 : 1) : solar ? -4 * j.rate : info.dryingMoisture;
+    const moisture = clamp(j.moisture + change, DRY_FLOOR_MOISTURE, 90);
+    const quality = clamp(j.quality + (solar ? 0 : info.dryingQuality), 5, 100);
+    if (isWet(weather) && !solar) lines.push({ text: `Rain soaked uncovered drying rack #${j.id}: moisture back up to ${moisture.toFixed(1)}%. Cover racks when rain is forecast.`, severity: 'warning' });
     else if (moisture <= SAFE_MOISTURE && j.moisture > SAFE_MOISTURE) lines.push({ text: `Rack #${j.id} reached ${moisture.toFixed(1)}% moisture. Safe to bag.`, severity: 'good' });
-    return { ...j, days: j.days + 1, moisture, quality: clamp(j.quality + info.dryingQuality, 5, 100) };
+    return { ...j, days: j.days + 1, moisture, quality };
   });
   return { ...s, dryingJobs };
 }
@@ -243,6 +257,11 @@ function payBills(s: GameState, insuredLoss: number, lines: LogLine[]) {
     lines.push({ text: `Not enough cash for payroll: ${quit} worker${quit > 1 ? 's' : ''} quit. Profit on paper is not cash in hand.`, severity: 'danger' });
   }
   cash -= wages; finance.wages += wages; finance.expenses += wages;
+
+  // Equipment needs looking after whether or not it is used.
+  const upkeep = Math.min(Math.max(0, cash), maintenanceCost(s));
+  if (upkeep < maintenanceCost(s)) lines.push({ text: 'Not enough cash for equipment maintenance this evening.', severity: 'warning' });
+  cash -= upkeep; finance.maintenance += upkeep; finance.expenses += upkeep;
 
   let premium = 0;
   if (upgrades.insurance) {

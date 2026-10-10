@@ -1,7 +1,12 @@
 export type PlotStatus = 'empty' | 'prepared' | 'growing' | 'ready';
-export type QualityGrade = 'A' | 'B' | 'C';
+export type QualityGrade = 'Premium' | 'A' | 'B' | 'C';
 export type Weather = 'sunny' | 'cloudy' | 'rain' | 'heavyRain' | 'storm' | 'heatwave';
-export type Product = 'fresh' | 'dried';
+export type Product = 'fresh' | 'dried' | 'powder';
+export type Packaging = 'bulk' | 'sealed';
+export type WashMethod = 'rinse' | 'thorough';
+export type SortLevel = 'none' | 'standard' | 'strict';
+export type CutStyle = 'split' | 'sliced';
+export type NpcId = 'baba' | 'amaka' | 'chinedu';
 export type SeedTier = 'local' | 'improved' | 'certified';
 export type PrepMethod = 'clear' | 'ridge';
 export type IssueKind = 'pest' | 'leafSpot' | 'rot';
@@ -36,7 +41,14 @@ export interface Batch {
   /** % water content. Fresh ginger is ~80%; dried ginger should be <= 12%. */
   moisture: number;
   createdDay: number;
+  /** How processed stock was bagged. Fresh ginger is never packaged. */
+  packaging?: Packaging;
+  /** Soil left on poorly washed ginger: a foreign-matter defect that caps the grade at B. */
+  soiled?: boolean;
 }
+
+/** Choices made at the washing, sorting and slicing stations before ginger goes on the racks. */
+export interface PrepChoices { wash: WashMethod; sort: SortLevel; cut: CutStyle; }
 
 export interface DryingJob {
   id: number;
@@ -46,6 +58,9 @@ export interface DryingJob {
   quality: number;
   days: number;
   covered: boolean;
+  /** Drying speed multiplier from the cut style (peeled slices dry faster than split rhizomes). */
+  rate: number;
+  soiled: boolean;
 }
 
 export interface ForecastDay { day: number; weather: Weather; confidence: number; }
@@ -67,11 +82,99 @@ export interface InspectionReport {
   consequences: string[];
 }
 
-export interface Upgrades { irrigation: boolean; warehouseLevel: number; tankLevel: number; insurance: boolean; }
+export interface Upgrades { irrigation: boolean; warehouseLevel: number; tankLevel: number; insurance: boolean; mill: boolean; solarDryer: boolean; factory: boolean; landLeased: number; }
 
-export interface Finance { revenue: number; expenses: number; wages: number; insurancePremiums: number; insurancePayouts: number; }
+export interface Finance { revenue: number; expenses: number; wages: number; insurancePremiums: number; insurancePayouts: number; interest: number; maintenance: number; logistics: number; }
 
-export interface Mission { id: string; title: string; description: string; target: number; progress: number; reward: number; complete: boolean; }
+export interface Mission {
+  id: string; title: string; description: string; target: number; progress: number; reward: number; complete: boolean;
+  /** Who gives the mission in the story. */
+  npc: NpcId | null;
+  /** What that character says when the mission starts. */
+  intro: string;
+  /** Short "what to do next" hint shown in the HUD. */
+  hint: string;
+}
+
+/** Running totals the campaign measures progress against. */
+export interface Stats { harvestedKg: number; freshSoldKg: number; processedKg: number; safeDriedKg: number; powderKg: number; exportedKg: number; }
+
+export interface CampaignFlags {
+  talked: Record<NpcId, number>;
+  /** Day the campaign storm is due, while mission 3 is active. */
+  stormDay: number | null;
+  stormOutcome: 'protected' | 'exposed' | null;
+  exportUnlocked: boolean;
+  shipments: number;
+}
+
+export type ContractStatus = 'offered' | 'active' | 'shipping' | 'delivered' | 'paid' | 'failed';
+export type PaymentTerms = 'advance' | 'onDelivery' | 'net30';
+
+/** A buyer's order: deliver `kg` of `product` at `minGrade` or better by `deadlineDay`. */
+export interface Contract {
+  id: number;
+  buyerId: string;
+  product: Exclude<Product, 'fresh'>;
+  minGrade: QualityGrade;
+  kg: number;
+  /** Export contracts are priced in US dollars per kg; domestic ones in naira. */
+  currency: 'USD' | 'NGN';
+  pricePerKg: number;
+  deadlineDay: number;
+  /** Fraction of the contract value deducted if delivered after the deadline. */
+  latePenalty: number;
+  terms: PaymentTerms;
+  status: ContractStatus;
+  offerExpiresDay: number;
+  /** Advance already received (₦), refunded if the contract fails. */
+  advancePaid: number;
+  campaign?: boolean;
+}
+
+export type ShipmentStage = 'road' | 'port' | 'sea' | 'delivered' | 'paid' | 'lost';
+export type Haulage = 'standard' | 'fleet';
+
+export interface ShipmentEvent { day: number; text: string; severity: Severity; }
+
+export interface Shipment {
+  id: number;
+  contractId: number;
+  kg: number;
+  grade: QualityGrade;
+  stage: ShipmentStage;
+  /** Days left in the current stage. */
+  daysLeft: number;
+  /** Days the current stage was planned to take (for map progress). */
+  stageDays: number;
+  haulage: Haulage;
+  insured: boolean;
+  /** Fraction of the cargo value lost to damage (insured or not). */
+  damage: number;
+  dispatchedDay: number;
+  arrivedDay: number | null;
+  payDay: number | null;
+  /** Final payment in naira once it is known. */
+  payout: number | null;
+  events: ShipmentEvent[];
+}
+
+export interface Loan {
+  id: number;
+  kind: 'bank' | 'equipment';
+  label: string;
+  principal: number;
+  balance: number;
+  /** Interest added to the balance each day. */
+  dailyRate: number;
+  dueDay: number;
+  defaulted: boolean;
+}
+
+export interface LevelUp { level: number; title: string | null; unlocks: string[]; }
+
+/** A line of story dialogue the HUD shows as a card until dismissed. */
+export interface Story { speaker: NpcId | null; title: string; text: string; }
 
 export interface GameState {
   day: number; cash: number; energy: number; xp: number; reputation: number; level: number;
@@ -90,13 +193,26 @@ export interface GameState {
   weatherQueue: Weather[];
   forecast: ForecastDay[];
   /** ₦ per kg. */
-  market: { fresh: number; dried: number };
-  priceHistory: { day: number; fresh: number; dried: number }[];
+  market: Record<Product, number>;
+  /** Naira per US dollar. Export contracts are paid in dollars, so this moves your revenue. */
+  fxRate: number;
+  priceHistory: ({ day: number } & Record<Product, number>)[];
   events: ActiveEvent[];
   log: LogEntry[];
   lastReport: DayReport | null;
   lastInspection: InspectionReport | null;
   finance: Finance;
   missions: Mission[];
+  stats: Stats;
+  flags: CampaignFlags;
+  /** Value of the tracked stat when the current mission started, so progress counts from then. */
+  missionBase: number;
+  story: Story | null;
+  contracts: Contract[];
+  shipments: Shipment[];
+  loans: Loan[];
+  /** Set after a loan default; lenders refuse new credit until it's repaid. */
+  creditBlocked: boolean;
+  levelUp: LevelUp | null;
   toast: string;
 }

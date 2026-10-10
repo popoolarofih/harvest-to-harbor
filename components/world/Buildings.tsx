@@ -86,18 +86,19 @@ export function Farmhouse() {
 
 export function Warehouse() {
   const b = BUILDINGS.warehouse;
-  const fresh = useGameStore(s => s.batches.filter(x => x.product === 'fresh').reduce((a, x) => a + x.kg, 0));
-  const dried = useGameStore(s => s.batches.filter(x => x.product === 'dried').reduce((a, x) => a + x.kg, 0));
+  const batches = useGameStore(s => s.batches);
   const over = useGameStore(s => storedKg(s) > warehouseCapacity(s));
-  // One sack ≈ 100 kg fresh or 50 kg dried. Sacks pile up out front where the player can see the harvest.
-  const sacks = [...Array(Math.min(30, Math.ceil(fresh / 100))).fill('fresh'), ...Array(Math.min(20, Math.ceil(dried / 50))).fill('dried')];
+  // Sacks pile up out front where the player can see the harvest: brown jute for fresh, beige for dried,
+  // white for sealed export bags, golden flat bags for powder. One sack ≈ 100 kg fresh or 50 kg processed.
+  const sacks = batches.flatMap(x => Array.from({ length: Math.ceil(x.kg / (x.product === 'fresh' ? 100 : 50)) }, () => x)).slice(0, 40)
+    .map(x => ({ flat: x.product === 'powder', tint: x.product === 'fresh' ? '#b58a5a' : x.product === 'powder' ? '#f0cd73' : x.packaging === 'sealed' ? '#f6f6f2' : '#d9c39a' }));
   return (
     <group position={[b.pos[0], 0, b.pos[2]]}>
       <BlockBuilding w={b.size[0]} d={b.size[1]} h={3.2} wall="#d8d3c6" band="#3f6e8c" door="open" />
       <Text position={[0, 2.75, b.size[1] / 2 + 0.05]} fontSize={0.3} color="#22313b">STORE</Text>
-      {sacks.map((kind, i) => {
+      {sacks.map((sack, i) => {
         const row = Math.floor(i / 10), col = i % 10;
-        return <Model key={i} model="sack" tint={kind === 'dried' ? '#f4efe2' : '#b58a5a'} scale={1.6} position={[-2.6 + col * 0.55, 0, b.size[1] / 2 + 0.5 + row * 0.55]} rotation={[0, (i * 1.7) % 0.6, 0]} />;
+        return <Model key={i} model={sack.flat ? 'sackFlat' : 'sack'} tint={sack.tint} scale={sack.flat ? 1.3 : 1.6} position={[-2.6 + col * 0.55, 0, b.size[1] / 2 + 0.5 + row * 0.55]} rotation={[0, (i * 1.7) % 0.6, 0]} />;
       })}
       {over && <Text position={[0, 3.9, b.size[1] / 2]} fontSize={0.28} color="#f4a35c">OVER CAPACITY</Text>}
       <Model model="boxLarge" position={[3.3, 0, 1]} scale={3} />
@@ -122,23 +123,35 @@ function DryingRack({ x, job }: { x: number; job?: { moisture: number; covered: 
 export function ProcessingShed() {
   const b = BUILDINGS.shed;
   const jobs = useGameStore(s => s.dryingJobs);
+  const mill = useGameStore(s => s.upgrades.mill), solar = useGameStore(s => s.upgrades.solarDryer);
+  const fx = useGameStore(s => s.fx);
   const zinc = useZincTexture();
-  const pulley = useRef<Mesh>(null);
-  useFrame((_, dt) => { if (pulley.current && jobs.length) pulley.current.rotation.x += dt * 12; });
+  const pulley = useRef<Mesh>(null), dust = useRef<Mesh>(null);
+  useFrame(({ clock }, dt) => {
+    const grinding = fx?.kind === 'grind' && performance.now() - fx.at < 4000;
+    if (pulley.current) pulley.current.rotation.x += dt * (grinding ? 30 : 0);
+    if (dust.current) { dust.current.visible = grinding; dust.current.scale.setScalar(1 + Math.sin(clock.elapsedTime * 20) * 0.15); }
+  });
   const [w, d] = b.size;
   return (
     <group position={[b.pos[0], 0, b.pos[2]]}>
       <mesh position={[0, 0.05, 0]} receiveShadow><boxGeometry args={[w, 0.1, d]} /><meshStandardMaterial color="#a9a398" /></mesh>
       {[-1, 0, 1].flatMap(i => [-1, 1].map(j => <mesh key={`${i}${j}`} position={[i * (w / 2 - 0.15), 1.4, j * (d / 2 - 0.15)]} castShadow><boxGeometry args={[0.14, 2.8, 0.14]} /><meshStandardMaterial color="#5a4330" /></mesh>))}
-      <mesh position={[0, 2.95, 0]} rotation={[0.12, 0, 0]} castShadow receiveShadow><boxGeometry args={[w + 0.6, 0.06, d + 0.8]} /><meshStandardMaterial map={zinc} metalness={0.55} roughness={0.45} /></mesh>
+      {solar ? <>
+        {/* Solar tunnel conversion: clear polythene roof and walls trap the sun's heat and keep rain off. */}
+        <mesh position={[0, 2.95, 0]} rotation={[0.12, 0, 0]}><boxGeometry args={[w + 0.6, 0.04, d + 0.8]} /><meshStandardMaterial color="#e8f4ff" transparent opacity={0.35} roughness={0.1} /></mesh>
+        {[-1, 1].map(j => <mesh key={j} position={[0, 1.45, j * (d / 2 - 0.1)]}><boxGeometry args={[w, 2.8, 0.03]} /><meshStandardMaterial color="#e8f4ff" transparent opacity={0.22} roughness={0.1} /></mesh>)}
+      </> : <mesh position={[0, 2.95, 0]} rotation={[0.12, 0, 0]} castShadow receiveShadow><boxGeometry args={[w + 0.6, 0.06, d + 0.8]} /><meshStandardMaterial map={zinc} metalness={0.55} roughness={0.45} /></mesh>}
       {[-1.6, 0, 1.6].map((x, i) => <DryingRack key={x} x={x} job={jobs[i]} />)}
-      <Text position={[0, 2.55, d / 2 + 0.35]} fontSize={0.26} color="#f3ead2">PROCESSING</Text>
-      {/* Hammer mill outside the shed: the belt pulley spins while there's ginger on the racks. */}
-      <group position={[w / 2 + 0.9, 0, 0.6]}>
+      <Text position={[0, 2.55, d / 2 + 0.35]} fontSize={0.26} color="#f3ead2">{solar ? 'SOLAR DRYER' : 'PROCESSING'}</Text>
+      {/* Hammer mill beside the shed, once bought: the belt pulley spins and dust flies while grinding. */}
+      {mill && <group position={[w / 2 + 0.9, 0, 0.6]}>
+        <mesh ref={dust} position={[0, 1.5, 0]} visible={false}><sphereGeometry args={[0.35, 10, 10]} /><meshStandardMaterial color="#e8cf8a" transparent opacity={0.45} /></mesh>
         <mesh position={[0, 0.5, 0]} castShadow><boxGeometry args={[0.8, 1, 0.7]} /><meshStandardMaterial color="#b23b2b" metalness={0.3} /></mesh>
         <mesh position={[0, 1.15, 0]}><cylinderGeometry args={[0.18, 0.3, 0.35, 8]} /><meshStandardMaterial color="#8d8d8d" metalness={0.6} /></mesh>
         <mesh ref={pulley} position={[0.45, 0.6, 0]} rotation={[0, 0, Math.PI / 2]}><cylinderGeometry args={[0.28, 0.28, 0.08, 12]} /><meshStandardMaterial color="#333" metalness={0.7} /></mesh>
-      </group>
+        <Text position={[0, 1.6, 0.4]} fontSize={0.16} color="#fff">MILL</Text>
+      </group>}
       <Model model="grinder" position={[-w / 2 - 0.7, 0, 1]} scale={3} />
       <Model model="barrel" position={[-w / 2 - 0.6, 0, -0.6]} scale={3} />
       <Model model="bucket" position={[-w / 2 - 1.1, 0, 0.1]} scale={3} />
@@ -157,8 +170,9 @@ export function WaterSystem() {
     if (jet.current) { jet.current.visible = pumping; jet.current.scale.y = 0.9 + Math.sin(clock.elapsedTime * 30) * 0.1; }
     if (genset.current) genset.current.position.y = pumping ? Math.sin(clock.elapsedTime * 60) * 0.015 : 0;
   });
+  const cols = useGameStore(s => 1 + Math.max(...s.plots.map(p => p.x)));
   const rowZ = [0, 1, 2, 3].map(z => plotPosition(0, z)[2]);
-  const fieldEast = plotPosition(3, 0)[0] + PLOT_SPACING / 2 + 0.2;
+  const fieldWest = plotPosition(0, 0)[0] - PLOT_SPACING / 2 - 0.2, fieldEast = plotPosition(cols - 1, 0)[0] + PLOT_SPACING / 2 + 0.2;
   return (
     <group>
       <group position={[TANK_POS[0], 0, TANK_POS[2]]}>
@@ -178,7 +192,7 @@ export function WaterSystem() {
       {irrigation && <group>
         <mesh position={[(TANK_POS[0] + fieldEast) / 2, 0.08, TANK_POS[2]]} rotation={[0, 0, Math.PI / 2]}><cylinderGeometry args={[0.06, 0.06, TANK_POS[0] - fieldEast, 6]} /><meshStandardMaterial color="#1c1c1c" /></mesh>
         <mesh position={[fieldEast, 0.08, (rowZ[0] + rowZ[3]) / 2]} rotation={[Math.PI / 2, 0, 0]}><cylinderGeometry args={[0.06, 0.06, rowZ[3] - rowZ[0] + 1, 6]} /><meshStandardMaterial color="#1c1c1c" /></mesh>
-        {rowZ.map(z => <mesh key={z} position={[0, 0.12, z + 0.85]} rotation={[0, 0, Math.PI / 2]}><cylinderGeometry args={[0.03, 0.03, fieldEast * 2, 6]} /><meshStandardMaterial color="#1c1c1c" /></mesh>)}
+        {rowZ.map(z => <mesh key={z} position={[(fieldWest + fieldEast) / 2, 0.12, z + 0.85]} rotation={[0, 0, Math.PI / 2]}><cylinderGeometry args={[0.03, 0.03, fieldEast - fieldWest, 6]} /><meshStandardMaterial color="#1c1c1c" /></mesh>)}
       </group>}
     </group>
   );

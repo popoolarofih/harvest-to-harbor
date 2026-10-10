@@ -2,13 +2,13 @@ import {
   EARLY_HARVEST_GROWTH, ENERGY, FERTILIZER_COST, FERTILIZER_GAIN, FRESH_MOISTURE, PREP, SEEDS, TREATMENTS,
   WATER_MOISTURE_GAIN, WATER_PER_PLOT,
 } from './config';
+import { isUnlocked, lockedReason } from './levels';
 import { expectedQuality, expectedYieldKg, inspectPlotReport } from './quality';
-import { addXp, blocked, clamp, fail, log, plotName, progressMission, spend, updatePlot } from './state';
+import { addXp, blocked, clamp, fail, log, plotName, spend, updatePlot } from './state';
 import type { Batch, GameState, PrepMethod, SeedTier } from './types';
 import { isWet } from './weather';
 
 const findPlot = (s: GameState, id: number) => s.plots.find(p => p.id === id);
-const isCropped = (status: string) => status === 'growing' || status === 'ready';
 
 export function preparePlot(s: GameState, id: number, method: PrepMethod = 'clear'): GameState {
   const p = findPlot(s, id), prep = PREP[method];
@@ -22,13 +22,13 @@ export function preparePlot(s: GameState, id: number, method: PrepMethod = 'clea
 export function plantPlot(s: GameState, id: number, seed: SeedTier = 'improved'): GameState {
   const p = findPlot(s, id), info = SEEDS[seed];
   if (!p || p.status !== 'prepared') return fail(s, 'Prepare the soil before planting.');
+  if (seed === 'certified' && !isUnlocked(s, 'certifiedSeed')) return fail(s, `Certified seed: ${lockedReason(s, 'certifiedSeed')}.`);
   const why = blocked(s, { energy: ENERGY.plant, cash: info.cost });
   if (why) return fail(s, why);
   const next = updatePlot(spend(s, info.cost, ENERGY.plant), id, {
     status: 'growing', seed, growth: 0, health: 100, stand: 0, germinated: false, daysReady: 0, issue: null,
   });
-  const planted = next.plots.filter(x => isCropped(x.status)).length;
-  return progressMission({ ...next, toast: `Planted ${info.label.toLowerCase()} on plot ${plotName(p)}.` }, 'plant', planted, true);
+  return { ...next, toast: `Planted ${info.label.toLowerCase()} on plot ${plotName(p)}.` };
 }
 
 export function waterPlot(s: GameState, id: number): GameState {
@@ -122,10 +122,11 @@ export function harvestPlot(s: GameState, id: number): GameState {
     batches = [...s.batches, { id: nextId++, product: 'fresh', kg, quality, moisture, createdDay: s.day }];
   }
 
-  const next = updatePlot({ ...spend(s, 0, ENERGY.harvest), batches, nextId }, id, {
+  const stats = { ...s.stats, harvestedKg: s.stats.harvestedKg + kg };
+  const next = updatePlot({ ...spend(s, 0, ENERGY.harvest), batches, nextId, stats }, id, {
     status: 'empty', growth: 0, health: 100, ridged: false, seed: null, stand: 0, germinated: false, daysReady: 0, issue: null,
     fertility: Math.max(10, p.fertility - 10),
   });
   const note = early ? ' (early: smaller rhizomes)' : p.daysReady > 4 ? ' (left too long: fibrous)' : '';
-  return progressMission(addXp({ ...next, toast: `Harvested ${Math.round(kg)} kg from ${plotName(p)}${note}.` }, 20), 'harvest', kg);
+  return addXp({ ...next, toast: `Harvested ${Math.round(kg)} kg from ${plotName(p)}${note}.` }, 20);
 }

@@ -30,16 +30,18 @@ export default function MarketPanel() {
   return <>
     <div className="eyebrow">Market</div>
     <h2>Prices & buyers</h2>
+    <div className="modal-row"><span>Exchange rate (export contracts are paid in dollars)</span><b>₦{Math.round(s.fxRate).toLocaleString()} / $</b></div>
     {crash && <div className="alert danger">Price crash in progress ({crash.daysLeft} days left). Holding dried stock or picking a different buyer can ride it out.</div>}
-    <div className="inventory-grid">{card('fresh', 'Fresh ginger')}{card('dried', 'Dried ginger')}</div>
+    <div className="inventory-grid">{card('fresh', 'Fresh ginger')}{card('dried', 'Dried ginger')}{card('powder', 'Ginger powder')}</div>
     <h4>Grade premiums</h4>
+    <div className="modal-row"><span>Premium (processed goods, sealed)</span><b>+{Math.round((GRADE_MULT.Premium - 1) * 100)}%</b></div>
     <div className="modal-row"><span>Grade A</span><b>+{Math.round((GRADE_MULT.A - 1) * 100)}%</b></div>
     <div className="modal-row"><span>Grade B</span><b>market price</b></div>
     <div className="modal-row"><span>Grade C</span><b>{Math.round((GRADE_MULT.C - 1) * 100)}%</b></div>
     <h4>Buyers</h4>
     {BUYERS.map(b => (
       <div key={b.id} className="upgrade">
-        <div><b>{b.name}</b><small>{b.product === 'fresh' ? 'Fresh' : 'Dried'} · min Grade {b.minGrade}{b.minKg ? ` · ${b.minKg} kg+` : ''}{b.maxMoisture ? ` · ≤${b.maxMoisture}% moisture` : ''}. {b.blurb}</small></div>
+        <div><b>{b.name}</b><small>{b.product === 'fresh' ? 'Fresh' : b.product === 'dried' ? 'Dried' : 'Powder'} · min Grade {b.minGrade}{b.minKg ? ` · ${b.minKg} kg+` : ''}{b.maxMoisture ? ` · ≤${b.maxMoisture}% moisture` : ''}. {b.blurb}</small></div>
         <b>{Math.round(b.priceMult * 100)}%</b>
       </div>
     ))}

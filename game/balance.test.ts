@@ -53,7 +53,7 @@ describe('season balance', () => {
   it('a careful season usually turns a profit on the starting ₦500k', () => {
     expect(careful.filter(s => s.cash > g.STARTING_CASH).length).toBeGreaterThanOrEqual(seeds.length / 2);
   });
-  it('neglected crops still produce something, so a first-time player is not wiped out', () => {
-    expect(neglect.every(s => s.finance.revenue > 0)).toBe(true);
+  it('neglect hurts but is not a total wipeout: most beds are harvested or still alive', () => {
+    for (const s of neglect) expect(s.stats.harvestedKg > 0 || s.plots.filter(p => p.status !== 'empty').length >= 8).toBe(true);
   });
 });

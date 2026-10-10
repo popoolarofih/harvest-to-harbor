@@ -3,7 +3,7 @@ import { Billboard, Text } from '@react-three/drei';
 import { useFrame, useThree } from '@react-three/fiber';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Vector3, type Group } from 'three';
-import { NPCS, type NpcId } from '../../game/simulation';
+import { NPCS, currentMission, type NpcId } from '../../game/simulation';
 import { useGameStore, type StationId, type Target } from '../../stores/gameStore';
 import { Okada } from './Buildings';
 import { COLLIDERS, NPC_SPOTS, ROAD_X, STATIONS, TANK_POS, TRUCK_POS, WALK_BOUNDS, plotPosition, targetPosition, targetRadius } from './layout';
@@ -128,6 +128,8 @@ function Npc({ id }: { id: NpcId }) {
   const spot = NPC_SPOTS[id];
   const ref = useRef<Group>(null);
   const talking = useGameStore(s => s.talkingTo === id);
+  const hasMission = useGameStore(s => currentMission(s)?.npc === id);
+  const marker = useRef<Group>(null);
   useFrame((_, dt) => {
     if (!ref.current) return;
     const d = player.pos.distanceTo(new Vector3(...spot.pos));
@@ -135,6 +137,7 @@ function Npc({ id }: { id: NpcId }) {
     let diff = goal - ref.current.rotation.y;
     diff = Math.atan2(Math.sin(diff), Math.cos(diff));
     ref.current.rotation.y += diff * Math.min(1, dt * 5);
+    if (marker.current) marker.current.position.y = 2.75 + Math.sin(performance.now() / 300) * 0.08;
   });
   return (
     <group position={spot.pos} onClick={e => { e.stopPropagation(); walkTo(new Vector3(...spot.pos), { kind: 'npc', id }); }}>
@@ -143,6 +146,8 @@ function Npc({ id }: { id: NpcId }) {
         <Text fontSize={0.26} color="#fff6dc" outlineWidth={0.02} outlineColor="#1a120b">{NPCS[id].name}</Text>
         <Text position={[0, -0.26, 0]} fontSize={0.15} color="#d8e8c4" outlineWidth={0.015} outlineColor="#1a120b">{NPCS[id].role}</Text>
       </Billboard>
+      {/* Gold marker over whoever is giving the current campaign mission. */}
+      {hasMission && <group ref={marker} position={[0, 2.75, 0]}><Billboard><Text fontSize={0.55} color="#ffd25a" outlineWidth={0.03} outlineColor="#3a2a00">!</Text></Billboard></group>}
     </group>
   );
 }
@@ -197,10 +202,30 @@ function Vehicle({ model, lane, speed, offset, scale = 1.4 }: { model: ModelId |
   );
 }
 
+const TRUCK_ROUTE = [new Vector3(...TRUCK_POS), new Vector3(TRUCK_POS[0], 0, -9), new Vector3(ROAD_X - 0.85, 0, -9), new Vector3(ROAD_X - 0.85, 0, 70)];
+const TRUCK_LEG_SECONDS = [2.2, 2.5, 9];
+
+/** The farm truck. After an export shipment it drives out of the gate and south toward Lagos, then comes back. */
 function FarmTruck() {
+  const ref = useRef<Group>(null), load = useRef<Group>(null);
+  const fx = useGameStore(s => (s.fx?.kind === 'ship' ? s.fx : null));
+  const p = useMemo(() => new Vector3(), []);
+  useFrame(() => {
+    if (!ref.current) return;
+    let t = fx ? (performance.now() - fx.at) / 1000 : Infinity;
+    let leg = 0;
+    while (leg < TRUCK_LEG_SECONDS.length && t > TRUCK_LEG_SECONDS[leg]) { t -= TRUCK_LEG_SECONDS[leg]; leg++; }
+    if (load.current) load.current.visible = leg < TRUCK_LEG_SECONDS.length;
+    if (leg >= TRUCK_LEG_SECONDS.length) { ref.current.position.copy(TRUCK_ROUTE[0]); ref.current.rotation.y = Math.PI; ref.current.visible = true; return; }
+    const a = TRUCK_ROUTE[leg], b = TRUCK_ROUTE[leg + 1];
+    p.lerpVectors(a, b, t / TRUCK_LEG_SECONDS[leg]);
+    ref.current.position.copy(p);
+    ref.current.rotation.y = Math.atan2(b.x - a.x, b.z - a.z);
+  });
   return (
-    <group position={TRUCK_POS} onClick={e => { e.stopPropagation(); walkTo(new Vector3(...TRUCK_POS), { kind: 'station', id: 'truck' }); }}>
-      <Model model="truck" scale={1.55} rotation={[0, Math.PI, 0]} />
+    <group ref={ref} position={TRUCK_POS} onClick={e => { e.stopPropagation(); walkTo(new Vector3(...TRUCK_POS), { kind: 'station', id: 'truck' }); }}>
+      <Model model="truck" scale={1.55} />
+      <group ref={load} visible={false}>{[-0.35, 0.35].flatMap(x => [-0.6, 0].map(z => <Model key={`${x}${z}`} model="sack" tint="#f6f6f2" scale={1.4} position={[x, 1.1, z - 0.5]} />))}</group>
     </group>
   );
 }
