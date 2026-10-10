@@ -8,7 +8,7 @@ import { useGameStore, type StationId, type Target } from '../../stores/gameStor
 import { Okada } from './Buildings';
 import { COLLIDERS, NPC_SPOTS, ROAD_X, STATIONS, TANK_POS, TRUCK_POS, WALK_BOUNDS, plotPosition, targetPosition, targetRadius } from './layout';
 import { Character, Model, type CharacterAnim, type ModelId } from './models';
-import { player, walkTo } from './playerState';
+import { player, view, walkTo, zoomBy } from './playerState';
 
 const WALK_SPEED = 4.2, SPRINT_SPEED = 7, BODY_RADIUS = 0.35;
 const KEYS = { up: ['KeyW', 'ArrowUp'], down: ['KeyS', 'ArrowDown'], left: ['KeyA', 'ArrowLeft'], right: ['KeyD', 'ArrowRight'] };
@@ -48,7 +48,6 @@ export function Player() {
   const keys = useRef(new Set<string>());
   const animRef = useRef<CharacterAnim>('idle');
   const [anim, setAnim] = useState<CharacterAnim>('idle');
-  const zoom = useRef(1.25);
   const { camera, gl } = useThree();
   const fx = useGameStore(s => s.fx);
 
@@ -62,17 +61,60 @@ export function Player() {
       const s = useGameStore.getState();
       if (e.code === 'KeyE' || e.code === 'Enter') { if (s.nearby) s.interact(s.nearby); }
       if (e.code === 'Escape') s.closeOverlays();
+      if (e.code === 'Equal' || e.code === 'NumpadAdd') zoomBy(1 / 1.15);
+      if (e.code === 'Minus' || e.code === 'NumpadSubtract') zoomBy(1.15);
     };
     const up = (e: KeyboardEvent) => keys.current.delete(e.code);
     const blur = () => keys.current.clear();
-    const wheel = (e: WheelEvent) => { zoom.current = Math.max(0.55, Math.min(1.7, zoom.current + e.deltaY * 0.001)); };
+    const wheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const dy = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY;
+      // Trackpad pinch arrives as ctrl+wheel with small deltas.
+      zoomBy(Math.exp(dy * (e.ctrlKey ? 0.01 : 0.0012)));
+    };
     window.addEventListener('keydown', down); window.addEventListener('keyup', up); window.addEventListener('blur', blur);
-    gl.domElement.addEventListener('wheel', wheel, { passive: true });
-    return () => { window.removeEventListener('keydown', down); window.removeEventListener('keyup', up); window.removeEventListener('blur', blur); gl.domElement.removeEventListener('wheel', wheel); };
+    const el = gl.domElement;
+    el.addEventListener('wheel', wheel, { passive: false });
+
+    // Two-finger pinch on touch screens.
+    const touches = new Map<number, { x: number; y: number }>();
+    let pinchDist = 0;
+    const spread = () => { const [a, b] = [...touches.values()]; return Math.hypot(a.x - b.x, a.y - b.y); };
+    const pDown = (e: PointerEvent) => {
+      if (e.pointerType !== 'touch') return;
+      touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (touches.size === 2) { pinchDist = spread(); player.goal = null; player.goalTarget = null; }
+    };
+    const pMove = (e: PointerEvent) => {
+      if (!touches.has(e.pointerId)) return;
+      touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (touches.size !== 2) return;
+      const d = spread();
+      if (pinchDist > 0 && d > 0) zoomBy(pinchDist / d);
+      pinchDist = d;
+      view.ignoreTapsUntil = performance.now() + 400;
+    };
+    const pUp = (e: PointerEvent) => {
+      if (!touches.delete(e.pointerId)) return;
+      if (touches.size < 2) pinchDist = 0;
+      if (touches.size > 0) view.ignoreTapsUntil = performance.now() + 400;
+    };
+    // iOS Safari fires its own gesture events; stop them from zooming the page.
+    const gesture = (e: Event) => e.preventDefault();
+    el.addEventListener('pointerdown', pDown); el.addEventListener('pointermove', pMove);
+    el.addEventListener('pointerup', pUp); el.addEventListener('pointercancel', pUp);
+    el.addEventListener('gesturestart', gesture); el.addEventListener('gesturechange', gesture);
+    return () => {
+      window.removeEventListener('keydown', down); window.removeEventListener('keyup', up); window.removeEventListener('blur', blur);
+      el.removeEventListener('wheel', wheel);
+      el.removeEventListener('pointerdown', pDown); el.removeEventListener('pointermove', pMove);
+      el.removeEventListener('pointerup', pUp); el.removeEventListener('pointercancel', pUp);
+      el.removeEventListener('gesturestart', gesture); el.removeEventListener('gesturechange', gesture);
+    };
   }, [gl]);
 
   const camGoal = useMemo(() => new Vector3(), []), look = useMemo(() => new Vector3(), []), vel = useMemo(() => new Vector3(), []);
-  useFrame((_, rawDt) => {
+  useFrame(({ size }, rawDt) => {
     const dt = Math.min(rawDt, 0.05);
     const k = keys.current, held = (codes: string[]) => codes.some(c => k.has(c));
     vel.set((held(KEYS.right) ? 1 : 0) - (held(KEYS.left) ? 1 : 0), 0, (held(KEYS.down) ? 1 : 0) - (held(KEYS.up) ? 1 : 0));
@@ -110,7 +152,10 @@ export function Player() {
     if (s.talkingTo && targetPosition({ kind: 'npc', id: s.talkingTo }, s.plots).distanceTo(player.pos) > 3.2) s.select(null);
     if (s.tankOpen && targetPosition({ kind: 'station', id: 'tank' }, s.plots).distanceTo(player.pos) > 3.5) s.select(null);
 
-    camGoal.set(player.pos.x, 10.5 * zoom.current, player.pos.z + 11 * zoom.current);
+    // Tall, narrow (portrait phone) screens see less of the farm side to side, so pull back a little.
+    const fit = Math.min(1.45, Math.max(1, Math.sqrt(size.height / Math.max(1, size.width))));
+    const dist = view.zoom * fit;
+    camGoal.set(player.pos.x, 10.5 * dist, player.pos.z + 11 * dist);
     camera.position.lerp(camGoal, 1 - Math.exp(-dt * 4));
     look.set(player.pos.x, 0.8, player.pos.z);
     camera.lookAt(look);

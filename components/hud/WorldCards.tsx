@@ -21,7 +21,7 @@ export function InteractPrompt() {
   if (!t || busy) return null;
   return (
     <button className="interact-prompt" onClick={() => s.interact(t)}>
-      <kbd>E</kbd> {describe(t, s.plots)}
+      <kbd className="hint-mouse">E</kbd><kbd className="hint-touch">Tap</kbd> {describe(t, s.plots)}
     </button>
   );
 }

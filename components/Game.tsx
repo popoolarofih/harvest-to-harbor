@@ -12,6 +12,7 @@ import { InspectionModal, MorningReport } from './hud/Reports';
 import StoragePanel from './hud/StoragePanel';
 import TradePanel from './hud/TradePanel';
 import { InteractPrompt, NpcCard, TankCard } from './hud/WorldCards';
+import { zoomBy } from './world/playerState';
 
 const FarmScene = dynamic(() => import('./FarmScene'), { ssr: false, loading: () => <div className="scene-loading">Preparing your farm...</div> });
 const TABS: [Panel, string][] = [['farm', 'Farm'], ['storage', 'Storage'], ['market', 'Market'], ['trade', 'Trade'], ['business', 'Business'], ['journal', 'Journal']];
@@ -71,7 +72,7 @@ export default function Game() {
             <div className="card">
               <div className="eyebrow">Operations</div>
               <h3>Run the farm</h3>
-              <p className="muted small">Walk with <kbd>WASD</kbd> or click the ground. Press <kbd>E</kbd> next to a plot, building or person. Every action costs energy; workers add more each day.</p>
+              <p className="muted small"><span className="hint-mouse">Walk with <kbd>WASD</kbd> or click the ground. Press <kbd>E</kbd> next to a plot, building or person. Scroll to zoom.</span><span className="hint-touch">Tap the ground to walk, tap a plot, building or person to use it. Pinch to zoom.</span> Every action costs energy; workers add more each day.</p>
               <div className="action-grid">
                 <button className="action primary" onClick={s.advance}><strong>🌙 End day</strong><small>Weather, growth, wages</small></button>
                 <button className="action" onClick={s.pump} disabled={s.water >= tankCapacity(s)}><strong>⛽ Pump borehole</strong><small>Refill tank with fuel</small></button>
@@ -93,6 +94,11 @@ export default function Game() {
         <nav className="bottom">
           {TABS.map(([id, label]) => <button key={id} className={`tab ${panel === id ? 'active' : ''}`} onClick={() => setPanel(id)}>{label}</button>)}
         </nav>
+
+        <div className="zoom-ctrl" role="group" aria-label="Camera zoom">
+          <button onClick={() => zoomBy(1 / 1.2)} aria-label="Zoom in" title="Zoom in (+)">+</button>
+          <button onClick={() => zoomBy(1.2)} aria-label="Zoom out" title="Zoom out (−)">−</button>
+        </div>
 
         <InteractPrompt />
         {s.toast && <div className="toast">{s.toast}</div>}
