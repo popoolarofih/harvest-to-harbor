@@ -1,27 +1,117 @@
 'use client';
 import dynamic from 'next/dynamic';
-import {useEffect,useMemo,useState} from 'react';
-import {useGameStore} from '../stores/gameStore';
-import {gradeForHealth} from '../game/simulation';
-const FarmScene=dynamic(()=>import('./FarmScene'),{ssr:false,loading:()=> <div className="scene-loading">Preparing your farm...</div>});
-const money=(n:number)=>`₦${Math.round(n).toLocaleString()}`;
-export default function Game(){
- const s=useGameStore(); const [panel,setPanel]=useState<'farm'|'inventory'|'market'|'journal'|'business'>('farm');
- useEffect(()=>{if(!s.toast)return;const t=setTimeout(s.clearToast,3200);return()=>clearTimeout(t)},[s.toast,s.clearToast]);
- const planted=s.plots.filter(p=>['planted','growing','ready'].includes(p.status)).length;
- const avgHealth=useMemo(()=>{const active=s.plots.filter(p=>['planted','growing','ready'].includes(p.status));return active.length?active.reduce((a,p)=>a+p.health,0)/active.length:0},[s.plots]);
- const completed=s.missions.filter(m=>m.complete).length;
- return <div className="game-shell"><div className="canvas-wrap"><FarmScene/></div><div className="hud"><header className="topbar"><div className="brand"><small>HARVEST TO HARBOR</small>NIGERIA</div><div className="stats"><div className="stat"><span>Cash</span><b>{money(s.cash)}</b></div><div className="stat"><span>Day</span><b>{s.day}</b></div><div className="stat"><span>Energy</span><b>{s.energy}%</b></div><div className="stat"><span>Level</span><b>{s.level}</b></div></div></header>
- <section className="side"><div className="eyebrow">Season 01 · Ginger</div><h2>Build your first export farm.</h2><div className="level-line"><span>Level {s.level}</span><span>{s.xp} XP</span></div><div className="progress"><i style={{width:`${(s.xp%250)/2.5}%`}}/></div><div className="mission"><b>Mission</b><br/>{s.missions.find(m=>!m.complete)?.description||'All starter missions complete.'}</div><div className="weather"><span>WEATHER</span><b>{s.weather.toUpperCase()}</b><em>Market ₦{(s.marketPrice/1_000_000).toFixed(2)}m/t</em></div><div className="hint">Click an empty plot to prepare it. Click prepared soil to plant. Ready crops can be harvested directly.</div></section>
- <section className="actions"><div className="card"><div className="eyebrow">Operations</div><h3>Run the farm</h3><div className="action-grid"><button className="action primary" onClick={s.advance}><strong>☀ Advance day</strong><small>Grow crops · reset energy</small></button><button className="action" onClick={s.process} disabled={s.freshGinger<.5}><strong>⚙ Process</strong><small>0.5t+ · ₦12k</small></button><button className="action" onClick={s.sell} disabled={!s.driedGinger}><strong>₦ Sell batch</strong><small>Domestic buyer</small></button><button className="action" onClick={()=>setPanel('business')}><strong>🏗 Upgrade</strong><small>Workers & warehouse</small></button></div></div></section>
- <div className="mini-stats"><div><span>Planted</span><b>{planted}/16</b></div><div><span>Fresh</span><b>{s.freshGinger.toFixed(2)}t</b></div><div><span>Dried</span><b>{s.driedGinger.toFixed(2)}t</b></div><div><span>Workers</span><b>{s.workers}</b></div></div>
- <div className="bottom">{(['farm','inventory','market','business','journal'] as const).map(x=><button key={x} className={`tab ${panel===x?'active':''}`} onClick={()=>setPanel(x)}>{x==='farm'?'Farm':x==='inventory'?'Inventory':x==='market'?'Market':x==='business'?'Business':'Journal'}</button>)}</div>
- {s.toast&&<div className="toast">{s.toast}</div>}
- {panel!=='farm'&&<div className="modal-backdrop" onClick={()=>setPanel('farm')}><div className="modal" onClick={e=>e.stopPropagation()}><button className="close" onClick={()=>setPanel('farm')}>Close</button>
- {panel==='inventory'&&<><div className="eyebrow">Inventory</div><h2>Harvest & products</h2><div className="inventory-grid"><div><span>Fresh ginger</span><b>{s.freshGinger.toFixed(2)}t</b></div><div><span>Dried ginger</span><b>{s.driedGinger.toFixed(2)}t</b></div><div><span>Powder</span><b>{s.gingerPowder.toFixed(2)}t</b></div><div><span>Warehouse capacity</span><b>{s.warehouse}t</b></div></div><p className="mission">Processing converts raw ginger into a more durable product. Later versions will add drying, grinding and export-grade packaging as separate playable steps.</p></>}
- {panel==='market'&&<><div className="eyebrow">Market</div><h2>Domestic ginger market</h2><div className="price-card"><span>Current simulated price</span><b>{money(s.marketPrice)} / tonne</b><small>Moves with weather and market conditions.</small></div><div className="modal-row"><span>Grade A premium</span><b>+8%</b></div><div className="modal-row"><span>Grade B</span><b>-8%</b></div><div className="modal-row"><span>Grade C</span><b>-28%</b></div><p className="mission">The market is simulated for gameplay. It is not a live agricultural price feed.</p></>}
- {panel==='business'&&<><div className="eyebrow">Business</div><h2>Build the operation</h2><div className="upgrade"><div><b>Hire worker</b><small>+1 worker · ₦35,000</small></div><button onClick={s.hire} disabled={s.cash<35000}>Hire</button></div><div className="upgrade"><div><b>Upgrade warehouse</b><small>+3t capacity · ₦150,000</small></div><button onClick={s.upgradeWarehouse} disabled={s.cash<150000}>Upgrade</button></div><div className="route"><span>YOUR ROAD TO EXPORT</span><b>Farm → Processing → Warehouse → Lagos → Global Buyer</b></div><p className="mission">The export route is the next progression layer. Complete the starter missions to build capital and unlock the next slice.</p></>}
- {panel==='journal'&&<><div className="eyebrow">Farmer's journal</div><h2>What the farm is teaching you</h2><div className="lesson"><b>Quality creates options.</b><p>Healthy crops are more likely to produce better yields. Processing and careful handling can turn a raw agricultural product into a product with different buyers and economics.</p></div><div className="lesson"><b>Today's crop health</b><p>{avgHealth?`${Math.round(avgHealth)}% average health · ${gradeForHealth(avgHealth)} grade potential.`:'Plant a crop to start tracking health.'}</p></div><div className="lesson"><b>Progress</b><p>{completed}/{s.missions.length} starter missions complete. Revenue generated: {money(s.totalRevenue)}.</p></div></>}
- </div></div>}
- </div></div>;
+import { useEffect, useState } from 'react';
+import { WEATHER_INFO, maxEnergy, money, plotName, tankCapacity } from '../game/simulation';
+import { useGameStore, type Panel } from '../stores/gameStore';
+import BusinessPanel from './hud/BusinessPanel';
+import MarketPanel from './hud/MarketPanel';
+import PlotPanel from './hud/PlotPanel';
+import { InspectionModal, MorningReport } from './hud/Reports';
+import StoragePanel from './hud/StoragePanel';
+import { InteractPrompt, NpcCard, TankCard } from './hud/WorldCards';
+
+const FarmScene = dynamic(() => import('./FarmScene'), { ssr: false, loading: () => <div className="scene-loading">Preparing your farm...</div> });
+const TABS: [Panel, string][] = [['farm', 'Farm'], ['storage', 'Storage'], ['market', 'Market'], ['business', 'Business'], ['journal', 'Journal']];
+const EVENT_LABEL = { priceCrash: '📉 Price crash', fuelSpike: '⛽ Fuel spike', workerShortage: '👷 Worker shortage' } as const;
+
+export default function Game() {
+  const s = useGameStore();
+  const panel = s.panel, setPanel = s.openPanel;
+  const [compact, setCompact] = useState(false);
+  useEffect(() => { if (!s.toast) return; const t = setTimeout(s.clearToast, 3600); return () => clearTimeout(t); }, [s.toast, s.clearToast]);
+
+  const mission = s.missions.find(m => !m.complete);
+  const crops = s.plots.filter(p => p.status === 'growing' || p.status === 'ready');
+  const ready = s.plots.filter(p => p.status === 'ready');
+  const freshKg = s.batches.filter(b => b.product === 'fresh').reduce((a, b) => a + b.kg, 0);
+  const driedKg = s.batches.filter(b => b.product === 'dried').reduce((a, b) => a + b.kg, 0);
+
+  return (
+    <div className="game-shell">
+      <div className="canvas-wrap"><FarmScene /></div>
+      <div className="hud">
+        <header className="topbar">
+          <div className="brand"><small>HARVEST TO HARBOR</small>NIGERIA</div>
+          <div className="stats">
+            <div className="stat"><span>Cash</span><b>{money(s.cash)}</b></div>
+            <div className="stat"><span>Day</span><b>{s.day}</b></div>
+            <div className="stat"><span>Energy</span><b>{s.energy}/{maxEnergy(s)}</b></div>
+            <div className="stat"><span>Tank</span><b>{s.water.toLocaleString()} L</b></div>
+            <div className="stat"><span>Level</span><b>{s.level}</b></div>
+          </div>
+        </header>
+
+        <section className={`side ${compact ? 'compact' : ''}`}>
+          <button className="collapse" onClick={() => setCompact(!compact)} aria-label={compact ? 'Expand panel' : 'Collapse panel'}>{compact ? '▸' : '▾'}</button>
+          <div className="eyebrow">Season 01 · Ginger · Kafanchan</div>
+          <div className="level-line"><span>Level {s.level}</span><span>{s.xp} XP · Rep {s.reputation}</span></div>
+          <div className="progress"><i style={{ width: `${(s.xp % 250) / 2.5}%` }} /></div>
+          <div className="mission"><b>Mission</b><br />{mission ? `${mission.description} (${Math.round(mission.progress).toLocaleString()}/${mission.target.toLocaleString()})` : 'All starter missions complete.'}</div>
+          <div className="forecast">
+            <span className="label">Today: {WEATHER_INFO[s.weather].icon} {WEATHER_INFO[s.weather].label}</span>
+            <div className="forecast-days">
+              {s.forecast.map(f => (
+                <div key={f.day} title={`${WEATHER_INFO[f.weather].label}, ${Math.round(f.confidence * 100)}% confidence`}>
+                  <small>D{f.day}</small><b>{WEATHER_INFO[f.weather].icon}</b><em>{Math.round(f.confidence * 100)}%</em>
+                </div>
+              ))}
+            </div>
+            <small className="muted">Forecasts further out are less reliable.</small>
+          </div>
+          {s.events.length > 0 && <div className="events">{s.events.map(e => <span key={e.kind} className="chip">{EVENT_LABEL[e.kind]} · {e.daysLeft}d</span>)}</div>}
+          <div className="weather"><span>FRESH</span><b>{money(s.market.fresh)}/kg</b><span>DRIED</span><b>{money(s.market.dried)}/kg</b></div>
+        </section>
+
+        <section className="actions">
+          {s.selectedPlot !== null ? <PlotPanel /> : s.tankOpen ? <TankCard /> : s.talkingTo ? <NpcCard /> : (
+            <div className="card">
+              <div className="eyebrow">Operations</div>
+              <h3>Run the farm</h3>
+              <p className="muted small">Walk with <kbd>WASD</kbd> or click the ground. Press <kbd>E</kbd> next to a plot, building or person. Every action costs energy; workers add more each day.</p>
+              <div className="action-grid">
+                <button className="action primary" onClick={s.advance}><strong>🌙 End day</strong><small>Weather, growth, wages</small></button>
+                <button className="action" onClick={s.pump} disabled={s.water >= tankCapacity(s)}><strong>⛽ Pump borehole</strong><small>Refill tank with fuel</small></button>
+                <button className="action" onClick={() => setPanel('storage')}><strong>📦 Storage</strong><small>{Math.round(freshKg)} kg fresh · {Math.round(driedKg)} kg dried</small></button>
+                <button className="action" onClick={() => setPanel('business')}><strong>🏗 Business</strong><small>Workers, insurance, upgrades</small></button>
+              </div>
+              {ready.length > 0 && <div className="alert good">Ready to harvest: {ready.map(plotName).join(', ')}</div>}
+            </div>
+          )}
+        </section>
+
+        <div className="mini-stats">
+          <div><span>Planted</span><b>{crops.length}/16</b></div>
+          <div><span>Fresh</span><b>{Math.round(freshKg)} kg</b></div>
+          <div><span>Drying</span><b>{s.dryingJobs.length} racks</b></div>
+          <div><span>Workers</span><b>{s.workers}</b></div>
+        </div>
+
+        <nav className="bottom">
+          {TABS.map(([id, label]) => <button key={id} className={`tab ${panel === id ? 'active' : ''}`} onClick={() => setPanel(id)}>{label}</button>)}
+        </nav>
+
+        <InteractPrompt />
+        {s.toast && <div className="toast">{s.toast}</div>}
+        <MorningReport />
+
+        {panel !== 'farm' && (
+          <div className="modal-backdrop" onClick={() => setPanel('farm')}>
+            <div className="modal" onClick={e => e.stopPropagation()}>
+              <button className="close" onClick={() => setPanel('farm')}>Close</button>
+              {panel === 'storage' && <StoragePanel />}
+              {panel === 'market' && <MarketPanel />}
+              {panel === 'business' && <BusinessPanel />}
+              {panel === 'journal' && <>
+                <div className="eyebrow">Farmer&apos;s journal</div>
+                <h2>What the farm is teaching you</h2>
+                {s.log.map((l, i) => <div key={i} className={`log ${l.severity}`}><small>Day {l.day}</small> {l.text}</div>)}
+                <button className="link" onClick={s.reset}>Start a new season (new random seed)</button>
+              </>}
+            </div>
+          </div>
+        )}
+        <InspectionModal />
+      </div>
+    </div>
+  );
 }

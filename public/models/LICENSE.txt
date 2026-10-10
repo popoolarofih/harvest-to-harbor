@@ -1,0 +1,5 @@
+3D models in this folder are by Kenney (www.kenney.nl), released under
+Creative Commons Zero (CC0): http://creativecommons.org/publicdomain/zero/1.0/
+
+Packs used: Mini Characters, Car Kit, Survival Kit, City Kit (Industrial), Food Kit, Nature Kit.
+Attribution is not required by the license but is given here with thanks.
