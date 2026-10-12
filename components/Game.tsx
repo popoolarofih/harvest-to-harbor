@@ -1,10 +1,10 @@
 'use client';
 import dynamic from 'next/dynamic';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { WEATHER_INFO, dailyFixedCosts, maxEnergy, money, plotName, tankCapacity, titleFor } from '../game/simulation';
 import { currentStep } from '../game/tutorial';
 import { useGameStore, type Panel } from '../stores/gameStore';
-import { boot, startNewSeason, useSession } from '../stores/session';
+import { boot, startNewSeason, useScreenTurn, useSession } from '../stores/session';
 import TitleScreen from './TitleScreen';
 import BusinessPanel from './hud/BusinessPanel';
 import { CampaignJournal, MissionCard, StoryCard } from './hud/Campaign';
@@ -17,7 +17,9 @@ import { InspectionModal, MorningReport } from './hud/Reports';
 import StoragePanel from './hud/StoragePanel';
 import TradePanel from './hud/TradePanel';
 import { NpcCard, TankCard } from './hud/WorldCards';
-import { zoomBy } from './world/playerState';
+import { faceNorth, rotateStep, view, zoomBy } from './world/playerState';
+import { enableAudio, playClick, setAudioPreferences } from '../lib/audio';
+import { useSettings } from '../stores/session';
 
 const FarmScene = dynamic(() => import('./FarmScene'), { ssr: false, loading: () => <div className="scene-loading">Preparing your farm...</div> });
 const TABS: [Panel, string][] = [['farm', 'Farm'], ['storage', 'Storage'], ['market', 'Market'], ['trade', 'Trade'], ['business', 'Business'], ['journal', 'Journal']];
@@ -35,16 +37,58 @@ const TIPS = {
 /** Phases: title (and boot, before storage is read) → intro → playing. The farm renders behind all of them. */
 export default function Game() {
   const phase = useSession(s => s.phase);
+  const music = useSettings(s => s.music), effects = useSettings(s => s.effects);
+  // When the orientation setting disagrees with how the device is held, the whole game is turned with CSS.
+  const turn = useScreenTurn(s => s.turn);
   // Storage is only read on the client, after hydration, so the server and first client render match.
   useEffect(() => { boot(); }, []);
+  useEffect(() => {
+    setAudioPreferences(music, effects);
+  }, [music, effects]);
+  useEffect(() => {
+    const onPointerDown = () => enableAudio();
+    const onClick = (event: MouseEvent) => {
+      if (event.target instanceof Element && event.target.closest('button:not(:disabled)')) playClick();
+    };
+    window.addEventListener('pointerdown', onPointerDown, { once: true });
+    window.addEventListener('click', onClick);
+    return () => { window.removeEventListener('pointerdown', onPointerDown); window.removeEventListener('click', onClick); };
+  }, []);
   // Highlight the HUD control the current tutorial step is about (see `data-tut` attributes).
   const control = useGameStore(s => (s.story ? null : currentStep(s.tutorial)?.control ?? null));
+  const turnClass = turn === 90 ? 'turn-cw' : turn === -90 ? 'turn-ccw' : '';
   return (
-    <div className={`game-shell ${phase === 'playing' && control ? `tut-${control}` : ''}`}>
+    <div className={`game-shell ${turnClass} ${phase === 'playing' && control ? `tut-${control}` : ''}`}>
       <div className="canvas-wrap"><FarmScene /></div>
       {phase === 'playing' && <Hud />}
       {(phase === 'boot' || phase === 'title') && <TitleScreen />}
       {phase === 'intro' && <IntroStory />}
+    </div>
+  );
+}
+
+/** Zoom, turn and north-up buttons. The compass needle is moved every frame without React renders. */
+function CameraControls() {
+  const needle = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    let raf = 0, last = NaN;
+    const tick = () => {
+      // The needle points to north on screen: it turns opposite to the world.
+      if (needle.current && view.yawNow !== last) { last = view.yawNow; needle.current.style.transform = `rotate(${-last}rad)`; }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, []);
+  return (
+    <div className="zoom-ctrl" role="group" aria-label="Camera">
+      <button id="cam-zoom-in" onClick={() => zoomBy(1 / 1.2)} aria-label="Zoom in" title="Zoom in (+)">+</button>
+      <button id="cam-zoom-out" onClick={() => zoomBy(1.2)} aria-label="Zoom out" title="Zoom out (−)">−</button>
+      <button id="cam-rotate-left" className="rot" onClick={() => rotateStep(-1)} aria-label="Turn camera left" title="Turn left (Q)">⟲</button>
+      <button id="cam-rotate-right" className="rot" onClick={() => rotateStep(1)} aria-label="Turn camera right" title="Turn right (R)">⟳</button>
+      <button id="cam-north" className="compass" onClick={faceNorth} aria-label="Face north" title="North up">
+        <span ref={needle} className="needle" aria-hidden><i>N</i></span>
+      </button>
     </div>
   );
 }
@@ -113,7 +157,7 @@ function Hud() {
           <div className="card">
             <div className="eyebrow">Operations</div>
             <h3>Run the farm</h3>
-            <p className="muted small"><span className="hint-mouse">Walk with <kbd>WASD</kbd> or click the ground. Press <kbd>E</kbd> next to a plot, building or person. Scroll to zoom.</span><span className="hint-touch">Tap the ground to walk, tap a plot, building or person to use it. Pinch to zoom.</span> Every action costs energy; workers add more each day.</p>
+            <p className="muted small"><span className="hint-mouse">Walk with <kbd>WASD</kbd> or click the ground. Press <kbd>E</kbd> next to a plot, building or person. Scroll to zoom; <kbd>Q</kbd>/<kbd>R</kbd> or right-drag to turn the view.</span><span className="hint-touch">Tap the ground to walk, tap a plot, building or person to use it. Pinch to zoom, twist two fingers to turn the view.</span> Every action costs energy; workers add more each day.</p>
             <div className="action-grid">
               <button className="action primary" data-tut="end-day" onClick={s.advance}><strong>🌙 End day</strong><small>{nightly > 0 ? `${money(nightly)} wages & upkeep tonight` : 'Weather, growth, wages'}</small></button>
               <button className="action" onClick={s.pump} disabled={s.water >= tankCapacity(s)}><strong>⛽ Pump borehole</strong><small>Refill tank with fuel</small></button>
@@ -136,10 +180,7 @@ function Hud() {
         {TABS.map(([id, label]) => <button key={id} className={`tab ${panel === id ? 'active' : ''}`} data-tut={id === 'storage' ? 'storage-tab' : undefined} onClick={() => setPanel(id)}>{label}</button>)}
       </nav>
 
-      <div className="zoom-ctrl" role="group" aria-label="Camera zoom">
-        <button onClick={() => zoomBy(1 / 1.2)} aria-label="Zoom in" title="Zoom in (+)">+</button>
-        <button onClick={() => zoomBy(1.2)} aria-label="Zoom out" title="Zoom out (−)">−</button>
-      </div>
+      <CameraControls />
 
       {s.toast && <div className="toast" role="status">{s.toast}</div>}
       <MorningReport />

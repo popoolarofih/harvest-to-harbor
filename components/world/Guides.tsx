@@ -8,6 +8,7 @@ import { useGameStore, type Target } from '../../stores/gameStore';
 import { reducedMotion, useSession } from '../../stores/session';
 import { describeTarget } from '../hud/WorldCards';
 import { NPC_SPOTS, STATIONS, plotPosition } from './layout';
+import { view } from './playerState';
 
 /** "plot:5" / "npc:baba" / "station:warehouse": a string, so the selector only re-renders when the target moves. */
 function beaconKey(s: ReturnType<typeof useGameStore.getState>): string | null {
@@ -51,12 +52,12 @@ export function TutorialBeacon() {
   );
 }
 
-/** Where the prompt sits: just in front of (camera side of) the thing, so it never hides its label. */
-function promptAnchor(t: Target, plots: { x: number; z: number }[]): [number, number, number] {
-  if (t.kind === 'plot') { const [x, , z] = plotPosition(plots[t.id].x, plots[t.id].z); return [x, 0.25, z + 1.2]; }
-  if (t.kind === 'npc') { const [x, , z] = NPC_SPOTS[t.id].pos; return [x, 0.1, z + 0.9]; }
+/** Where the prompt sits: [x, y, z, offset]. It's pushed `offset` toward the camera so it never hides the thing's label. */
+function promptAnchor(t: Target, plots: { x: number; z: number }[]): [number, number, number, number] {
+  if (t.kind === 'plot') { const [x, , z] = plotPosition(plots[t.id].x, plots[t.id].z); return [x, 0.25, z, 1.2]; }
+  if (t.kind === 'npc') { const [x, , z] = NPC_SPOTS[t.id].pos; return [x, 0.1, z, 0.9]; }
   const [x, , z] = STATIONS[t.id].pos;
-  return [x, 0.4, z + 0.8];
+  return [x, 0.4, z, 0.8];
 }
 
 /** "[E] Talk to Baba Musa", drawn next to the nearby object. Positioned by drei every frame without React renders. */
@@ -66,12 +67,23 @@ export function WorldPrompt() {
   const busy = useGameStore(s => s.selectedPlot !== null || !!s.talkingTo || s.tankOpen || s.panel !== 'farm' || !!s.story);
   const playing = useSession(s => s.phase === 'playing');
   const plots = useGameStore(s => s.plots);
-  if (!nearby || busy || !playing) return null;
+  const group = useRef<Group>(null);
+  const anchor = nearby ? promptAnchor(nearby, plots) : null;
+  // Follow the camera as it turns, so the prompt stays on the side facing the player's view.
+  useFrame(() => {
+    if (!group.current || !anchor) return;
+    const [x, y, z, o] = anchor;
+    group.current.position.set(x + Math.sin(view.yawNow) * o, y, z + Math.cos(view.yawNow) * o);
+  });
+  if (!nearby || !anchor || busy || !playing) return null;
+  const [x, y, z, o] = anchor;
   return (
-    <Html position={promptAnchor(nearby, plots)} center zIndexRange={[5, 0]}>
-      <button className="interact-prompt world" data-tut="prompt" onClick={e => { e.stopPropagation(); useGameStore.getState().interact(nearby); }}>
-        <kbd className="hint-mouse">E</kbd><kbd className="hint-touch">Tap</kbd> {label}
-      </button>
-    </Html>
+    <group ref={group} position={[x + Math.sin(view.yawNow) * o, y, z + Math.cos(view.yawNow) * o]}>
+      <Html center zIndexRange={[5, 0]}>
+        <button className="interact-prompt world" data-tut="prompt" onClick={e => { e.stopPropagation(); useGameStore.getState().interact(nearby); }}>
+          <kbd className="hint-mouse">E</kbd><kbd className="hint-touch">Tap</kbd> {label}
+        </button>
+      </Html>
+    </group>
   );
 }

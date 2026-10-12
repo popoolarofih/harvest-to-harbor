@@ -215,6 +215,12 @@ describe('money and labour', () => {
     expect(irrigated.plots[0].moisture).toBeGreaterThan(advanceDay(withWeather(base, 'sunny')).plots[0].moisture);
     expect(irrigated.water).toBeLessThan(base.water);
   });
+  it('drip irrigation starts watering dry planted plots as soon as it is installed', () => {
+    const base = withPlot(initialState(), 0, { status: 'growing', seed: 'improved', growth: 30, moisture: 30 });
+    const installed = buyUpgrade(base, 'irrigation');
+    expect(installed.plots[0].moisture).toBe(55);
+    expect(installed.water).toBe(base.water - 400);
+  });
 });
 
 describe('npc advice', () => {

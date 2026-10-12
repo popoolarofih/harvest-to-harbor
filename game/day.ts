@@ -1,6 +1,6 @@
 import {
   BASE_PRICES, BASE_YIELD_KG, FX_BASE, DRY_FLOOR_MOISTURE, INSURANCE_COVER, INSURANCE_PREMIUM, SAFE_MOISTURE, SEEDS, TREATMENTS,
-  WAGE_PER_DAY, WATER_MOISTURE_GAIN, WATER_PER_PLOT, WEATHER_INFO,
+  WAGE_PER_DAY, WATER_PER_PLOT, WEATHER_INFO,
 } from './config';
 import { checkCampaign, judgeStorm } from './campaign';
 import { tickContracts, tickShipments } from './contracts';
@@ -11,6 +11,7 @@ import {
 } from './state';
 import type { ActiveEvent, Batch, GameState, IssueKind, LogLine, Plot, Product, Weather } from './types';
 import { buildForecast, isWet, nextWeather } from './weather';
+import { autoIrrigate } from './irrigation';
 
 const ISSUE_GROWTH: Record<IssueKind, number> = { pest: 4, leafSpot: 4, rot: 5 };
 const PRICE_HISTORY_DAYS = 30;
@@ -103,7 +104,7 @@ function collectRainwater(s: GameState, weather: Weather, lines: LogLine[]): Gam
 
 function growPlots(s: GameState, rng: Rng, weather: Weather, lines: LogLine[]) {
   const info = WEATHER_INFO[weather], wet = isWet(weather);
-  let water = s.water, irrigated = 0, insuredLoss = 0, stormHit = 0;
+  let insuredLoss = 0, stormHit = 0;
   const waterlogged: string[] = [], dry: string[] = [], poorStand: string[] = [], matured: string[] = [], visible: string[] = [], died: string[] = [];
 
   let plots = s.plots.map((orig): Plot => {
@@ -114,10 +115,6 @@ function growPlots(s: GameState, rng: Rng, weather: Weather, lines: LogLine[]) {
     p.moisture = clamp(m, 5, 100);
     if ((p.status !== 'growing' && p.status !== 'ready') || !p.seed) return p;
     const seed = SEEDS[p.seed];
-
-    if (s.upgrades.irrigation && p.moisture < 45 && water >= WATER_PER_PLOT) {
-      water -= WATER_PER_PLOT; p.moisture += WATER_MOISTURE_GAIN; irrigated++;
-    }
 
     if (p.status === 'growing') {
       const moistF = p.moisture >= 35 && p.moisture <= 80 ? 1 : p.moisture >= 25 && p.moisture <= 90 ? 0.6 : 0.3;
@@ -189,7 +186,9 @@ function growPlots(s: GameState, rng: Rng, weather: Weather, lines: LogLine[]) {
     return { ...p, issue: { kind: source.issue!.kind, severity: 8, detected: false } };
   });
 
-  if (irrigated) lines.push({ text: `Drip irrigation watered ${irrigated} plot${irrigated > 1 ? 's' : ''} (${(irrigated * WATER_PER_PLOT).toLocaleString()} L).`, severity: 'info' });
+  const irrigation = autoIrrigate({ ...s, plots });
+  plots = irrigation.state.plots;
+  if (irrigation.irrigated) lines.push({ text: `Drip irrigation watered ${irrigation.irrigated} plot${irrigation.irrigated > 1 ? 's' : ''} (${(irrigation.irrigated * WATER_PER_PLOT).toLocaleString()} L).`, severity: 'info' });
   if (stormHit) lines.push({ text: `Storm winds battered ${stormHit} plot${stormHit > 1 ? 's' : ''}, tearing leaves and costing health.`, severity: 'danger' });
   if (waterlogged.length) lines.push({ text: `Waterlogged: ${list(waterlogged)}. Ridged beds drain faster; rot risk is up.`, severity: 'warning' });
   if (dry.length) lines.push({ text: `Drought stress: ${list(dry)}. Water these plots.`, severity: 'warning' });
@@ -197,7 +196,7 @@ function growPlots(s: GameState, rng: Rng, weather: Weather, lines: LogLine[]) {
   if (visible.length) lines.push({ text: `Visible damage on ${list(visible)}. Inspect and treat before it spreads.`, severity: 'danger' });
   if (matured.length) lines.push({ text: `Ready to harvest: ${list(matured)}. Waiting adds a little yield but raises rot and storm risk.`, severity: 'good' });
   if (died.length) lines.push({ text: `Crop lost on ${list(died)}. Check plots regularly: problems start hidden.`, severity: 'danger' });
-  return { state: { ...s, plots, water }, insuredLoss };
+  return { state: irrigation.state, insuredLoss };
 }
 
 function ageStock(s: GameState, weather: Weather, lines: LogLine[]): GameState {

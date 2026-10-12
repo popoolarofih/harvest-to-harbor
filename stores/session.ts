@@ -63,8 +63,10 @@ export function resetSave() {
 // ---- Settings: per-device preferences, not part of the game save. ----
 
 export type MotionPref = 'system' | 'reduce' | 'full';
+/** auto follows the device; landscape/portrait keep the game that way up even if the device can't rotate the page. */
+export type OrientationPref = 'auto' | 'landscape' | 'portrait';
 const SETTINGS_KEY = 'h2h.settings';
-export const useSettings = create<{ motion: MotionPref }>(() => ({ motion: 'system' }));
+export const useSettings = create<{ motion: MotionPref; orientation: OrientationPref; music: boolean; effects: boolean }>(() => ({ motion: 'system', orientation: 'auto', music: true, effects: true }));
 
 const systemReduced = () => typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 /** Read by per-frame animation code, so it's a plain getter rather than a hook. */
@@ -77,15 +79,87 @@ const applyMotion = () => { if (typeof document !== 'undefined') document.docume
 function loadSettings() {
   if (typeof window === 'undefined') return;
   try {
-    const m = JSON.parse(window.localStorage.getItem(SETTINGS_KEY) ?? '{}').motion;
+    const saved = JSON.parse(window.localStorage.getItem(SETTINGS_KEY) ?? '{}');
+    const m = saved.motion, o = saved.orientation;
     if (m === 'reduce' || m === 'full' || m === 'system') useSettings.setState({ motion: m });
+    if (o === 'auto' || o === 'landscape' || o === 'portrait') useSettings.setState({ orientation: o });
+    if (typeof saved.music === 'boolean') useSettings.setState({ music: saved.music });
+    if (typeof saved.effects === 'boolean') useSettings.setState({ effects: saved.effects });
   } catch { /* defaults */ }
   applyMotion();
   window.matchMedia?.('(prefers-reduced-motion: reduce)').addEventListener?.('change', applyMotion);
+  installScreenTurn();
+}
+
+function persistSettings() {
+  try { window.localStorage.setItem(SETTINGS_KEY, JSON.stringify(useSettings.getState())); } catch { /* preference just won't stick */ }
 }
 
 export function setMotion(motion: MotionPref) {
   useSettings.setState({ motion });
   applyMotion();
-  try { window.localStorage.setItem(SETTINGS_KEY, JSON.stringify({ motion })); } catch { /* preference just won't stick */ }
+  persistSettings();
+}
+
+export function setMusic(music: boolean) { useSettings.setState({ music }); persistSettings(); }
+export function setEffects(effects: boolean) { useSettings.setState({ effects }); persistSettings(); }
+
+// ---- Screen orientation ----
+
+/**
+ * How far the whole game is turned with CSS to honour the orientation setting: 0, 90 (clockwise, landscape on an
+ * upright phone) or -90 (anticlockwise, portrait on a sideways screen). Only used when the page itself is the
+ * wrong way round, e.g. iOS or a phone with rotation lock on; if the browser can lock orientation natively,
+ * the viewport already matches and this stays 0.
+ */
+export type ScreenTurn = 0 | 90 | -90;
+export const useScreenTurn = create<{ turn: ScreenTurn }>(() => ({ turn: 0 }));
+/** Plain getter for pointer handlers that need to map screen drags back into game directions. */
+export const screenTurn = () => useScreenTurn.getState().turn;
+
+export function screenTurnFor(pref: OrientationPref, width: number, height: number): ScreenTurn {
+  if (pref === 'landscape' && height > width) return 90;
+  if (pref === 'portrait' && width > height) return -90;
+  return 0;
+}
+
+function applyScreenTurn() {
+  if (typeof window === 'undefined') return;
+  const turn = screenTurnFor(useSettings.getState().orientation, window.innerWidth, window.innerHeight);
+  if (turn !== useScreenTurn.getState().turn) useScreenTurn.setState({ turn });
+}
+
+let turnInstalled = false;
+function installScreenTurn() {
+  if (turnInstalled) return;
+  turnInstalled = true;
+  applyScreenTurn();
+  window.addEventListener('resize', applyScreenTurn);
+  window.addEventListener('orientationchange', applyScreenTurn);
+  nativeLock(useSettings.getState().orientation);
+}
+
+/** Ask the browser to lock orientation where it can (installed web apps, fullscreen on Android). Failing is fine: CSS takes over. */
+function nativeLock(pref: OrientationPref) {
+  if (typeof screen === 'undefined') return;
+  const so = screen.orientation as (ScreenOrientation & { lock?: (o: string) => Promise<void>; unlock?: () => void }) | undefined;
+  try {
+    if (pref === 'auto') so?.unlock?.();
+    else so?.lock?.(pref)?.catch(() => { /* not supported here */ });
+  } catch { /* not supported here */ }
+}
+
+export function setOrientation(orientation: OrientationPref) {
+  useSettings.setState({ orientation });
+  persistSettings();
+  nativeLock(orientation);
+  applyScreenTurn();
+}
+
+/** The quick "Rotate screen" action: flip to whichever way the game isn't showing right now. */
+export function rotateScreen() {
+  if (typeof window === 'undefined') return;
+  const wide = window.innerWidth > window.innerHeight;
+  const showingLandscape = screenTurn() === 0 ? wide : !wide;
+  setOrientation(showingLandscape ? 'portrait' : 'landscape');
 }

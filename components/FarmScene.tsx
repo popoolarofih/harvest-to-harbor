@@ -21,7 +21,8 @@ function WalkPlane() {
 
 export default function FarmScene() {
   return (
-    <Canvas shadows dpr={[1, 1.5]} camera={{ position: [0, 10.5, 3.5], fov: 45, near: 0.5, far: 200 }}
+    // offsetSize: measure the layout box, not the on-screen bounding box, so a CSS-rotated screen keeps the right aspect.
+    <Canvas shadows dpr={[1, 1.5]} resize={{ offsetSize: true }} camera={{ position: [0, 10.5, 3.5], fov: 45, near: 0.5, far: 200 }}
       onCreated={({ gl }) => { if (process.env.NODE_ENV !== 'production') (window as unknown as { __gl: typeof gl }).__gl = gl; }}>
       <Weather />
       <Suspense fallback={null}>

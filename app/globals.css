@@ -99,6 +99,26 @@ html,body{overscroll-behavior:none}
 .zoom-ctrl{position:absolute;left:max(20px,env(safe-area-inset-left));bottom:calc(20px + env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:1px;background:#ffffff15;border:1px solid #ffffff15;border-radius:13px;overflow:hidden;pointer-events:auto;backdrop-filter:blur(12px)}
 .zoom-ctrl button{width:42px;height:42px;border:0;background:#0d140fe5;color:var(--text);font-family:'Space Grotesk';font-size:20px;line-height:1;cursor:pointer}
 .zoom-ctrl button:active{background:#273328}
+.zoom-ctrl button.rot{font-size:18px}
+.zoom-ctrl button.compass{display:grid;place-items:center;padding:0}
+.needle{display:inline-block;width:24px;height:24px;position:relative}
+.needle::before{content:'';position:absolute;left:50%;top:3px;transform:translateX(-50%);border-left:4px solid transparent;border-right:4px solid transparent;border-bottom:8px solid #e69b52}
+.needle::after{content:'';position:absolute;left:50%;bottom:3px;transform:translateX(-50%);border-left:4px solid transparent;border-right:4px solid transparent;border-top:8px solid #9aa69c}
+.needle i{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-family:'Space Grotesk';font-size:8px;font-weight:700;font-style:normal;color:#fff;pointer-events:none}
+.game-shell.turn-cw{position:fixed;top:50%;left:50%;width:100vh;height:100vw;width:100dvh;height:100dvw;transform:translate(-50%,-50%) rotate(90deg);transform-origin:center center}
+.game-shell.turn-ccw{position:fixed;top:50%;left:50%;width:100vh;height:100vw;width:100dvh;height:100dvw;transform:translate(-50%,-50%) rotate(-90deg);transform-origin:center center}
+.turn-cw .topbar{height:52px}
+.turn-cw .side{top:54px;max-height:calc(100% - 120px);overflow:auto;padding:10px 38px 10px 12px}
+.turn-cw .side .forecast,.turn-cw .side .events,.turn-cw .side .weather{display:none}
+.turn-cw .zoom-ctrl{top:56px}
+.turn-cw .zoom-ctrl button{width:36px;height:36px}
+.turn-cw .mini-stats{display:none}
+.turn-cw .actions{top:54px;bottom:auto;right:56px;max-height:calc(100% - 120px)}
+.turn-cw .bottom{width:auto;left:50%;transform:translateX(-50%)}
+.turn-cw .tab{min-height:34px;padding:6px 10px}
+.turn-cw .interact-prompt{bottom:60px}
+.turn-cw .modal{max-height:92%}
+.turn-cw .report{top:58px;max-height:calc(100% - 70px);overflow:auto}
 .close{min-width:36px;min-height:34px}
 @media(max-width:850px){
 .stats .stat:nth-child(3){display:block}

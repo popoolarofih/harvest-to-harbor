@@ -4,6 +4,7 @@ export * from './config';
 export * from './state';
 export * from './quality';
 export * from './farm';
+export * from './irrigation';
 export * from './economy';
 export { advanceDay } from './day';
 export { isWet } from './weather';

@@ -5,17 +5,27 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Vector3, type Group } from 'three';
 import { NPCS, currentMission, type NpcId } from '../../game/simulation';
 import { useGameStore, type StationId, type Target } from '../../stores/gameStore';
-import { isPlaying, reducedMotion } from '../../stores/session';
+import { isPlaying, reducedMotion, screenTurn } from '../../stores/session';
 import { Okada } from './Buildings';
 import { COLLIDERS, NPC_SPOTS, ROAD_X, STATIONS, TANK_POS, TRUCK_POS, WALK_BOUNDS, plotPosition, targetPosition, targetRadius } from './layout';
 import { Character, Model, type CharacterAnim, type ModelId } from './models';
-import { player, view, walkTo, zoomBy } from './playerState';
+import { player, rotateBy, rotateStep, view, walkTo, zoomBy } from './playerState';
 
 const WALK_SPEED = 4.2, SPRINT_SPEED = 7, BODY_RADIUS = 0.35;
 /** What the camera circles behind the title screen: roughly the middle of the farm. */
 const TITLE_CENTER = new Vector3(2, 0, -5);
 const KEYS = { up: ['KeyW', 'ArrowUp'], down: ['KeyS', 'ArrowDown'], left: ['KeyA', 'ArrowLeft'], right: ['KeyD', 'ArrowRight'] };
 const ACTION_ANIM: Partial<Record<string, CharacterAnim>> = { harvest: 'pick-up', plant: 'pick-up', prepare: 'interact-right', water: 'interact-right', fertilize: 'interact-right', treat: 'interact-right', inspect: 'pick-up', pump: 'interact-right' };
+/** Radians of camera turn per pixel of right/middle-mouse drag. */
+const DRAG_ROTATE = 0.008;
+/** A two-finger gesture only starts turning the camera after this much twist, so a plain pinch doesn't wobble it. */
+const TWIST_DEADZONE = 0.12;
+
+/** Horizontal drag distance as the player sees it, even when the whole game is turned sideways by the orientation setting. */
+function userDx(dx: number, dy: number) {
+  const turn = screenTurn();
+  return turn === 90 ? dy : turn === -90 ? -dy : dx;
+}
 
 function resolveCollisions(p: Vector3) {
   for (const [x0, z0, x1, z1] of COLLIDERS) {
@@ -67,6 +77,9 @@ export function Player() {
       if (e.code === 'Escape') s.closeOverlays();
       if (e.code === 'Equal' || e.code === 'NumpadAdd') zoomBy(1 / 1.15);
       if (e.code === 'Minus' || e.code === 'NumpadSubtract') zoomBy(1.15);
+      const plain = !e.ctrlKey && !e.metaKey && !e.altKey;
+      if (plain && e.code === 'KeyQ') rotateStep(-1);
+      if (plain && e.code === 'KeyR') rotateStep(1);
     };
     const up = (e: KeyboardEvent) => keys.current.delete(e.code);
     const blur = () => keys.current.clear();
@@ -81,27 +94,52 @@ export function Player() {
     const el = gl.domElement;
     el.addEventListener('wheel', wheel, { passive: false });
 
-    // Two-finger pinch on touch screens.
+    // Right- or middle-button drag turns the camera. Left clicks stay free for walking and using things.
+    let drag: { id: number; x: number; y: number } | null = null;
+    const contextMenu = (e: Event) => e.preventDefault();
+
+    // Two fingers: pinch to zoom, twist to turn.
     const touches = new Map<number, { x: number; y: number }>();
-    let pinchDist = 0;
-    const spread = () => { const [a, b] = [...touches.values()]; return Math.hypot(a.x - b.x, a.y - b.y); };
+    let pinchDist = 0, twistAngle = 0, twistAcc = 0, twisting = false;
+    const pair = () => { const [a, b] = [...touches.values()]; return { d: Math.hypot(a.x - b.x, a.y - b.y), angle: Math.atan2(b.y - a.y, b.x - a.x) }; };
     const pDown = (e: PointerEvent) => {
+      if (e.pointerType === 'mouse' && (e.button === 1 || e.button === 2)) {
+        e.preventDefault();
+        drag = { id: e.pointerId, x: e.clientX, y: e.clientY };
+        el.setPointerCapture?.(e.pointerId);
+        return;
+      }
       if (e.pointerType !== 'touch') return;
       touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
-      if (touches.size === 2) { pinchDist = spread(); player.goal = null; player.goalTarget = null; }
+      if (touches.size === 2) {
+        const p = pair();
+        pinchDist = p.d; twistAngle = p.angle; twistAcc = 0; twisting = false;
+        player.goal = null; player.goalTarget = null;
+      }
     };
     const pMove = (e: PointerEvent) => {
+      if (drag && e.pointerId === drag.id) {
+        if (isPlaying()) rotateBy(userDx(e.clientX - drag.x, e.clientY - drag.y) * DRAG_ROTATE);
+        drag.x = e.clientX; drag.y = e.clientY;
+        return;
+      }
       if (!touches.has(e.pointerId)) return;
       touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
       if (touches.size !== 2 || !isPlaying()) return;
-      const d = spread();
+      const { d, angle } = pair();
       if (pinchDist > 0 && d > 0) zoomBy(pinchDist / d);
       pinchDist = d;
+      // Fingers turning clockwise on screen turn the world clockwise with them, like a map.
+      const turn = Math.atan2(Math.sin(angle - twistAngle), Math.cos(angle - twistAngle));
+      twistAngle = angle;
+      if (twisting) rotateBy(turn);
+      else if (Math.abs(twistAcc += turn) > TWIST_DEADZONE) { twisting = true; rotateBy(twistAcc); }
       view.ignoreTapsUntil = performance.now() + 400;
     };
     const pUp = (e: PointerEvent) => {
+      if (drag && e.pointerId === drag.id) { drag = null; return; }
       if (!touches.delete(e.pointerId)) return;
-      if (touches.size < 2) pinchDist = 0;
+      if (touches.size < 2) { pinchDist = 0; twisting = false; twistAcc = 0; }
       if (touches.size > 0) view.ignoreTapsUntil = performance.now() + 400;
     };
     // iOS Safari fires its own gesture events; stop them from zooming the page.
@@ -109,12 +147,14 @@ export function Player() {
     el.addEventListener('pointerdown', pDown); el.addEventListener('pointermove', pMove);
     el.addEventListener('pointerup', pUp); el.addEventListener('pointercancel', pUp);
     el.addEventListener('gesturestart', gesture); el.addEventListener('gesturechange', gesture);
+    el.addEventListener('contextmenu', contextMenu);
     return () => {
       window.removeEventListener('keydown', down); window.removeEventListener('keyup', up); window.removeEventListener('blur', blur);
       el.removeEventListener('wheel', wheel);
       el.removeEventListener('pointerdown', pDown); el.removeEventListener('pointermove', pMove);
       el.removeEventListener('pointerup', pUp); el.removeEventListener('pointercancel', pUp);
       el.removeEventListener('gesturestart', gesture); el.removeEventListener('gesturechange', gesture);
+      el.removeEventListener('contextmenu', contextMenu);
     };
   }, [gl]);
 
@@ -131,7 +171,13 @@ export function Player() {
       return;
     }
     const k = keys.current, held = (codes: string[]) => codes.some(c => k.has(c));
-    vel.set((held(KEYS.right) ? 1 : 0) - (held(KEYS.left) ? 1 : 0), 0, (held(KEYS.down) ? 1 : 0) - (held(KEYS.up) ? 1 : 0));
+    // Ease the camera heading toward where the player turned it.
+    view.yawNow = reducedMotion() ? view.yaw : view.yawNow + (view.yaw - view.yawNow) * (1 - Math.exp(-dt * 9));
+    if (Math.abs(view.yaw - view.yawNow) < 1e-4) view.yawNow = view.yaw;
+    const sinY = Math.sin(view.yawNow), cosY = Math.cos(view.yawNow);
+    // Keys are read as screen directions (up = away from the camera), then turned into world directions.
+    const ix = (held(KEYS.right) ? 1 : 0) - (held(KEYS.left) ? 1 : 0), iz = (held(KEYS.down) ? 1 : 0) - (held(KEYS.up) ? 1 : 0);
+    vel.set(ix * cosY + iz * sinY, 0, iz * cosY - ix * sinY);
     const sprint = k.has('ShiftLeft') || k.has('ShiftRight');
     if (vel.lengthSq() > 0) { player.goal = null; player.goalTarget = null; player.busy = 0; }
     else if (player.goal) {
@@ -169,7 +215,7 @@ export function Player() {
     // Tall, narrow (portrait phone) screens see less of the farm side to side, so pull back a little.
     const fit = Math.min(1.45, Math.max(1, Math.sqrt(size.height / Math.max(1, size.width))));
     const dist = view.zoom * fit;
-    camGoal.set(player.pos.x, 10.5 * dist, player.pos.z + 11 * dist);
+    camGoal.set(player.pos.x + sinY * 11 * dist, 10.5 * dist, player.pos.z + cosY * 11 * dist);
     camera.position.lerp(camGoal, 1 - Math.exp(-dt * 4));
     look.set(player.pos.x, 0.8, player.pos.z);
     camera.lookAt(look);

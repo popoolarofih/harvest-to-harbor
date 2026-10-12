@@ -1,11 +1,12 @@
 import {
   BUYERS, CUT, DRYING_COST_PER_KG, DRYING_RACK_KG, ENERGY, FACTORY_SEALED_DISCOUNT, GRIND_COST_PER_KG, GRIND_FUEL_PER_KG, GRIND_MAX_MOISTURE, GRIND_YIELD,
-  HIRE_COST, LITRES_PER_FUEL_LITRE, MAX_LAND_LEASES, PACKAGING, SAFE_MOISTURE, SORT, UPGRADES, WASH, WORKER_ENERGY, type UpgradeId,
+  HIRE_COST, LITRES_PER_FUEL_LITRE, MAX_LAND_LEASES, PACKAGING, SAFE_MOISTURE, SORT, UPGRADES, WASH, WATER_PER_PLOT, WORKER_ENERGY, type UpgradeId,
 } from './config';
 import { lockedReason, maxWorkers, type UnlockId } from './levels';
 import { checkSale, gradeForBatch, gradeLabel, inspectBatchReport } from './quality';
 import { addXp, blocked, clamp, earn, fail, fuelPrice, leasedPlots, log, money, spend, tankCapacity } from './state';
 import type { Batch, DryingJob, GameState, Packaging, PrepChoices } from './types';
+import { autoIrrigate } from './irrigation';
 
 const PRODUCT_NAME = { fresh: 'fresh ginger', dried: 'dried ginger', powder: 'ginger powder' } as const;
 
@@ -189,8 +190,14 @@ export function buyUpgrade(s: GameState, id: UpgradeId): GameState {
   if (no) return fail(s, no);
   const why = blocked(s, { cash: u.cost });
   if (why) return fail(s, why);
-  const next = log(applyUpgrade(spend(s, u.cost), id), { text: `Invested in ${u.label.toLowerCase()} (${money(u.cost)}).`, severity: 'info' });
-  return addXp({ ...next, toast: `${u.label} ready.` }, 40);
+  let next = applyUpgrade(spend(s, u.cost), id);
+  const irrigation = id === 'irrigation' ? autoIrrigate(next) : { state: next, irrigated: 0 };
+  next = irrigation.state;
+  const installLine = irrigation.irrigated
+    ? ` Drip lines started on ${irrigation.irrigated} dry plot${irrigation.irrigated > 1 ? 's' : ''}, using ${(irrigation.irrigated * WATER_PER_PLOT).toLocaleString()} L.`
+    : '';
+  next = log(next, { text: `Invested in ${u.label.toLowerCase()} (${money(u.cost)}).${installLine}`, severity: 'info' });
+  return addXp({ ...next, toast: `${u.label} ready.${installLine}` }, 40);
 }
 
 export function toggleInsurance(s: GameState): GameState {

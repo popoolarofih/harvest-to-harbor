@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { SAFE_MOISTURE } from '../../game/simulation';
 import { useSaveStatus } from '../../stores/persistence';
-import { resetSave, setMotion, toTitle, useSession, useSettings, type MotionPref } from '../../stores/session';
+import { resetSave, rotateScreen, setEffects, setMotion, setMusic, setOrientation, toTitle, useSession, useSettings, type MotionPref, type OrientationPref } from '../../stores/session';
 
 /** "Saved just now" / "Saved at 14:05" / "Saved 3 Oct, 14:05". */
 export function savedLabel(at: number | null, now = Date.now()) {
@@ -78,9 +78,13 @@ export function ConfirmDialog({ title, children, confirm, onConfirm, onCancel, d
 const noop = () => {};
 
 const MOTION: [MotionPref, string][] = [['system', 'Match device'], ['reduce', 'Reduced'], ['full', 'Full']];
+const ORIENTATION: [OrientationPref, string][] = [['auto', 'Auto'], ['landscape', 'Landscape'], ['portrait', 'Portrait']];
 
 export function SettingsPanel({ onClose }: { onClose: () => void }) {
   const motion = useSettings(s => s.motion);
+  const orientation = useSettings(s => s.orientation);
+  const music = useSettings(s => s.music);
+  const effects = useSettings(s => s.effects);
   const savedAt = useSaveStatus(s => s.savedAt), error = useSaveStatus(s => s.error);
   const save = useSession(s => s.save);
   const [confirmReset, setConfirmReset] = useState(false);
@@ -92,11 +96,21 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
         <button className="close" onClick={onClose}>Close</button>
         <div className="eyebrow">Settings</div>
         <h2>Settings</h2>
+        <h4>Screen</h4>
+        <div className="seg" role="radiogroup" aria-label="Screen orientation">
+          {ORIENTATION.map(([id, label]) => <button key={id} id={`orientation-${id}`} role="radio" aria-checked={orientation === id} className={orientation === id ? 'on' : ''} onClick={() => setOrientation(id)}>{label}</button>)}
+        </div>
+        <p className="muted small">Auto follows how you hold your device. Landscape or Portrait keeps the game that way up, even with rotation lock on.</p>
         <h4>Motion</h4>
         <div className="seg" role="radiogroup" aria-label="Motion">
           {MOTION.map(([id, label]) => <button key={id} role="radio" aria-checked={motion === id} className={motion === id ? 'on' : ''} onClick={() => setMotion(id)}>{label}</button>)}
         </div>
         <p className="muted small">Reduced motion stops the menu camera drifting and turns off pulsing highlights and swaying effects.</p>
+        <h4>Audio</h4>
+        <div className="seg" role="group" aria-label="Audio settings">
+          <button role="switch" aria-checked={music} className={music ? 'on' : ''} onClick={() => setMusic(!music)}>Music</button>
+          <button role="switch" aria-checked={effects} className={effects ? 'on' : ''} onClick={() => setEffects(!effects)}>Sound effects</button>
+        </div>
         <h4>Your saved farm</h4>
         <p className="small">
           {save?.kind === 'unavailable' ? 'This browser is blocking site storage, so the game can\'t save here.' : hasSave ? `${savedLabel(savedAt)}. ` : 'No saved farm yet. '}
@@ -131,6 +145,7 @@ export function GameMenu({ onClose }: { onClose: () => void }) {
           <button className="action primary" onClick={onClose}><strong>Resume</strong></button>
           <button className="action" onClick={() => setView('help')}><strong>How to play</strong></button>
           <button className="action" onClick={() => setView('settings')}><strong>Settings</strong></button>
+          <button id="menu-rotate-screen" className="action" onClick={rotateScreen}><strong>📱 Rotate screen</strong></button>
           <button className="action" onClick={() => { onClose(); toTitle(); }}><strong>Save &amp; main menu</strong></button>
         </div>
       </div>
@@ -150,8 +165,9 @@ export function HowToPlay({ onClose }: { onClose: () => void }) {
         <div className="howto-grid">
           <section>
             <h4>🎮 Move and interact</h4>
-            <p><b>Keyboard and mouse:</b> walk with <kbd>WASD</kbd> or the arrow keys (hold <kbd>Shift</kbd> to run), or click the ground. Press <kbd>E</kbd> beside a plot, building or person. Scroll or <kbd>+</kbd>/<kbd>−</kbd> to zoom.</p>
-            <p><b>Touch:</b> tap the ground to walk; tap a plot, building or person to go and use it. Pinch to zoom.</p>
+            <p><b>Keyboard and mouse:</b> walk with <kbd>WASD</kbd> or the arrow keys (hold <kbd>Shift</kbd> to run), or click the ground. Press <kbd>E</kbd> beside a plot, building or person. Scroll or <kbd>+</kbd>/<kbd>−</kbd> to zoom. Turn the view with <kbd>Q</kbd>/<kbd>R</kbd> or by dragging with the right mouse button.</p>
+            <p><b>Touch:</b> tap the ground to walk; tap a plot, building or person to go and use it. Pinch to zoom, twist two fingers to turn the view.</p>
+            <p><b>Camera buttons:</b> ⟲ ⟳ turn the view, the compass puts north back at the top. Use <b>Rotate screen</b> in the menu (or Settings) to switch between landscape and portrait.</p>
           </section>
           <section>
             <h4>🌱 Grow</h4>
