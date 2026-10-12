@@ -1,6 +1,7 @@
 import { BANK_LOANS, DEFAULT_PENALTY, EQUIPMENT_FINANCE, INSURANCE_PREMIUM, MAINTENANCE, UPGRADES, WAGE_PER_DAY, type UpgradeId } from './config';
 import { buyerOf, contractValue } from './contracts';
 import { applyUpgrade, ownsUpgrade, upgradeBlocked } from './economy';
+import { autoIrrigate } from './irrigation';
 import { lockedReason } from './levels';
 import { addXp, fail, log, money, spend } from './state';
 import type { GameState, LogLine } from './types';
@@ -41,7 +42,8 @@ export function financeUpgrade(s: GameState, id: UpgradeId): GameState {
   if (s.cash < down) return fail(s, `You need ${money(down)} for the down payment.`);
   if (totalDebt(s) + financed > creditLimit(s)) return fail(s, `That would take you over your ${money(creditLimit(s))} credit limit.`);
   const loan = { id: s.nextId, kind: 'equipment' as const, label: `${u.label} financing`, principal: financed, balance: financed, dailyRate: EQUIPMENT_FINANCE.annualRate / 365, dueDay: s.day + EQUIPMENT_FINANCE.days, defaulted: false };
-  const next = applyUpgrade({ ...spend(s, down), nextId: s.nextId + 1, loans: [...s.loans, loan] }, id);
+  const installed = applyUpgrade({ ...spend(s, down), nextId: s.nextId + 1, loans: [...s.loans, loan] }, id);
+  const next = id === 'irrigation' ? autoIrrigate(installed).state : installed;
   return addXp(log({ ...next, toast: `${u.label} installed: ${money(down)} down, ${money(financed)} financed until day ${loan.dueDay}.` }, { text: `Financed ${u.label.toLowerCase()} (${money(financed)} owed).`, severity: 'info' }), 40);
 }
 

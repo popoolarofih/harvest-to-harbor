@@ -56,6 +56,7 @@ export function TutorialBeacon() {
 function promptAnchor(t: Target, plots: { x: number; z: number }[]): [number, number, number, number] {
   if (t.kind === 'plot') { const [x, , z] = plotPosition(plots[t.id].x, plots[t.id].z); return [x, 0.25, z, 1.2]; }
   if (t.kind === 'npc') { const [x, , z] = NPC_SPOTS[t.id].pos; return [x, 0.1, z, 0.9]; }
+  if (t.kind === 'station' && t.id === 'signboard') return [STATIONS.signboard.pos[0], 1.3, STATIONS.signboard.pos[2], 1.2];
   const [x, , z] = STATIONS[t.id].pos;
   return [x, 0.4, z, 0.8];
 }
@@ -64,7 +65,7 @@ function promptAnchor(t: Target, plots: { x: number; z: number }[]): [number, nu
 export function WorldPrompt() {
   const nearby = useGameStore(s => s.nearby);
   const label = useGameStore(s => (s.nearby ? describeTarget(s.nearby, s.plots) : ''));
-  const busy = useGameStore(s => s.selectedPlot !== null || !!s.talkingTo || s.tankOpen || s.panel !== 'farm' || !!s.story);
+  const busy = useGameStore(s => s.selectedPlot !== null || !!s.talkingTo || s.tankOpen || s.panel !== 'farm' || !!s.story || s.customizingProfile);
   const playing = useSession(s => s.phase === 'playing');
   const plots = useGameStore(s => s.plots);
   const group = useRef<Group>(null);

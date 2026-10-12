@@ -41,6 +41,7 @@ Ten story missions given in person by Baba Musa, Amaka and Chinedu (a gold **!**
 
 You are a farmer on the land, not a dashboard. Walk with **WASD / arrow keys** (hold **Shift** to run), or click/tap the ground. Click a plot, building or person to walk there and use it, or press **E** when you're next to it. **Esc** closes panels; the mouse wheel zooms; **Q / R**, right-mouse drag or two-finger twist rotate the camera around your farmer (or use the on-screen **⟲ ⟳** and compass needle buttons). Switch interface orientation between auto, landscape, and portrait from the in-game menu or Settings.
 
+- **Farm signboard** (entrance gate): customize your farm name, emblem, farmer outfit & skin tone, export brand seal, and UI color theme (also accessible by clicking the topbar brand or in ☰ Menu)
 - **Plots**: prepare, plant, water, fertilize, inspect, treat, harvest
 - **Water tank & borehole** (east of the field): pump water with diesel; drip lines appear once irrigation is bought
 - **Processing shed**: drying racks show the ginger slices and the tarpaulin when covered; the hammer mill runs while racks are full

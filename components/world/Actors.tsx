@@ -221,10 +221,14 @@ export function Player() {
     camera.lookAt(look);
   });
 
+  const profile = useGameStore(s => s.profile);
   return (
     <group ref={ref}>
-      <Character variant="male-e" tone={0} anim={anim} />
+      <Character variant={profile.avatar} tone={profile.skinTone} anim={anim} />
       <mesh position={[0, 0.02, 0]} rotation={[-Math.PI / 2, 0, 0]}><circleGeometry args={[0.45, 20]} /><meshBasicMaterial color="#b4e16e" transparent opacity={0.35} /></mesh>
+      <Billboard position={[0, 2.05, 0]}>
+        <Text fontSize={0.22} color="#fff6dc" outlineWidth={0.02} outlineColor="#1a120b">{profile.farmerName}</Text>
+      </Billboard>
     </group>
   );
 }
@@ -337,13 +341,13 @@ function FarmTruck() {
 
 /** Invisible click targets for buildings, so the player can click a building to walk over and use it. */
 function StationHitboxes() {
-  return <>{(['office', 'warehouse', 'shed', 'tank'] as StationId[]).map(id => {
+  return <>{(['office', 'warehouse', 'shed', 'tank', 'signboard'] as StationId[]).map(id => {
     const s = STATIONS[id];
     return (
-      <mesh key={id} position={id === 'tank' ? [TANK_POS[0], 2.5, TANK_POS[2]] : [s.pos[0], 1.5, s.pos[2] - (id === 'office' || id === 'warehouse' ? 2.4 : 0)]}
+      <mesh key={id} position={id === 'signboard' ? [-9.2, 1.4, -6.8] : id === 'tank' ? [TANK_POS[0], 2.5, TANK_POS[2]] : [s.pos[0], 1.5, s.pos[2] - (id === 'office' || id === 'warehouse' ? 2.4 : 0)]}
         onClick={e => { e.stopPropagation(); walkTo(new Vector3(...s.pos), { kind: 'station', id }); }}
         onPointerOver={() => { document.body.style.cursor = 'pointer'; }} onPointerOut={() => { document.body.style.cursor = ''; }}>
-        <boxGeometry args={id === 'shed' ? [5, 3, 4.4] : id === 'tank' ? [3.4, 5, 3] : [5.6, 3.4, 4.6]} />
+        <boxGeometry args={id === 'signboard' ? [2.4, 1.8, 1.2] : id === 'shed' ? [5, 3, 4.4] : id === 'tank' ? [3.4, 5, 3] : [5.6, 3.4, 4.6]} />
         <meshBasicMaterial transparent opacity={0} depthWrite={false} />
       </mesh>
     );

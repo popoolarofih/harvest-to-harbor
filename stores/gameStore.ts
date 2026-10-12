@@ -3,10 +3,11 @@ import { create } from 'zustand';
 import { restoreGame, type SaveFile, type SaveMeta } from '../game/save';
 import * as sim from '../game/simulation';
 import { TUTORIAL_START, signalsBetween, skipStep, stepTutorial, type TutorialProgress } from '../game/tutorial';
-import type { GameState, Haulage, Packaging, PrepChoices, PrepMethod, SeedTier } from '../game/types';
+import type { AutomationSettings, GameState, Haulage, Packaging, PrepChoices, PrepMethod, SeedTier } from '../game/types';
+import { playAction } from '../lib/audio';
 
 export type Panel = 'farm' | 'storage' | 'market' | 'trade' | 'business' | 'journal';
-export type StationId = 'tank' | 'shed' | 'warehouse' | 'office' | 'truck';
+export type StationId = 'tank' | 'shed' | 'warehouse' | 'office' | 'truck' | 'signboard';
 /** Something in the world the player can walk up to and use. */
 export type Target = { kind: 'plot'; id: number } | { kind: 'station'; id: StationId } | { kind: 'npc'; id: sim.NpcId };
 /** A short-lived visual cue for the 3D scene (splash, pump jet, harvest...). */
@@ -23,6 +24,7 @@ interface UiState {
   fx: Fx | null;
   /** Saved with the game (see game/save.ts) so an unfinished tutorial resumes after a reload. */
   tutorial: TutorialProgress;
+  customizingProfile: boolean;
 }
 
 interface Actions {
@@ -55,6 +57,8 @@ interface Actions {
   dismiss: () => void;
   upgrade: (id: sim.UpgradeId) => void;
   toggleInsurance: () => void;
+  configureAutomation: (patch: Partial<AutomationSettings>) => void;
+  repairIrrigation: () => void;
   dismissReport: () => void;
   clearInspection: () => void;
   clearToast: () => void;
@@ -70,6 +74,9 @@ interface Actions {
   /** Use whatever the target is: open the plot panel, a building's panel, or talk to an NPC. */
   interact: (t: Target) => void;
   closeOverlays: () => void;
+  openProfile: () => void;
+  closeProfile: () => void;
+  updateProfile: (patch: Partial<sim.PlayerProfile>) => void;
 }
 
 export type Store = GameState & UiState & Actions;
@@ -80,7 +87,7 @@ export const gameOf = (s: Store): GameState => Object.fromEntries(GAME_KEYS.map(
 export const metaOf = (s: Store): SaveMeta => ({ reportSeenDay: s.reportSeenDay, tutorial: s.tutorial });
 
 /** UI state for a game that is just starting or resuming: nothing open, nothing selected. */
-const freshUi = () => ({ selectedPlot: null, panel: 'farm' as Panel, nearby: null, talkingTo: null, tankOpen: false, fx: null });
+const freshUi = () => ({ selectedPlot: null, panel: 'farm' as Panel, nearby: null, talkingTo: null, tankOpen: false, fx: null, customizingProfile: false });
 
 const sameTarget = (a: Target | null, b: Target | null) => a?.kind === b?.kind && a?.id === b?.id;
 
@@ -91,6 +98,7 @@ export const useGameStore = create<Store>((set, get) => {
   const act = (kind: Fx['kind'], fn: (s: GameState) => GameState, plot?: number) => set(s => {
     const next = sim.checkCampaign(fn(s));
     const changed = next.energy !== s.energy || next.cash !== s.cash || next.water !== s.water;
+    if (changed) playAction(kind);
     return changed ? { ...next, fx: { kind, plot, at: performance.now() } } : next;
   });
   return {
@@ -127,6 +135,8 @@ export const useGameStore = create<Store>((set, get) => {
     dismiss: () => apply(sim.dismissWorker),
     upgrade: id => apply(s => sim.buyUpgrade(s, id)),
     toggleInsurance: () => apply(sim.toggleInsurance),
+    configureAutomation: patch => set(s => ({ automation: { ...s.automation, ...patch } })),
+    repairIrrigation: () => apply(sim.repairIrrigation),
     dismissReport: () => set(s => ({ reportSeenDay: s.day })),
     clearInspection: () => set({ lastInspection: null }),
     clearToast: () => set({ toast: '' }),
@@ -136,18 +146,22 @@ export const useGameStore = create<Store>((set, get) => {
     skipTutorialStep: () => set(s => ({ tutorial: skipStep(s.tutorial, s.plots) })),
     replayTutorial: () => set(s => ({ tutorial: stepTutorial(TUTORIAL_START, [], s.plots), panel: 'farm' })),
     openPanel: panel => set({ panel }),
+    openProfile: () => set({ customizingProfile: true }),
+    closeProfile: () => set({ customizingProfile: false }),
+    updateProfile: patch => apply(s => sim.updateProfile(s, patch)),
     // Called every frame by the player: only touch the store when the target actually changes,
     // otherwise every subscriber (the whole HUD) would re-render at 60 fps.
     setNearby: t => { if (!sameTarget(get().nearby, t)) set({ nearby: t }); },
     interact: t => set(() => {
-      const closed = { selectedPlot: null, talkingTo: null, tankOpen: false };
+      const closed = { selectedPlot: null, talkingTo: null, tankOpen: false, customizingProfile: false };
       if (t.kind === 'plot') return { ...closed, selectedPlot: t.id };
       if (t.kind === 'npc') return { ...sim.talkTo(get(), t.id), ...closed, talkingTo: t.id };
       if (t.id === 'tank') return { ...closed, tankOpen: true };
-      const panel: Record<Exclude<StationId, 'tank'>, Panel> = { shed: 'storage', warehouse: 'storage', office: 'business', truck: 'trade' };
+      if (t.id === 'signboard') return { ...closed, customizingProfile: true };
+      const panel: Record<Exclude<StationId, 'tank' | 'signboard'>, Panel> = { shed: 'storage', warehouse: 'storage', office: 'business', truck: 'trade' };
       return { ...closed, panel: panel[t.id] };
     }),
-    closeOverlays: () => set({ selectedPlot: null, talkingTo: null, tankOpen: false, panel: 'farm', lastInspection: null, story: null }),
+    closeOverlays: () => set({ selectedPlot: null, talkingTo: null, tankOpen: false, panel: 'farm', lastInspection: null, story: null, customizingProfile: false }),
   };
 });
 

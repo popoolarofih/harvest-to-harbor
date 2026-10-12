@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { WEATHER_INFO, dailyFixedCosts, maxEnergy, money, plotName, tankCapacity, titleFor } from '../game/simulation';
 import { currentStep } from '../game/tutorial';
 import { useGameStore, type Panel } from '../stores/gameStore';
-import { boot, startNewSeason, useScreenTurn, useSession } from '../stores/session';
+import { boot, setMusic, startNewSeason, useScreenTurn, useSession } from '../stores/session';
 import TitleScreen from './TitleScreen';
 import BusinessPanel from './hud/BusinessPanel';
 import { CampaignJournal, MissionCard, StoryCard } from './hud/Campaign';
@@ -16,6 +16,7 @@ import PlotPanel from './hud/PlotPanel';
 import { InspectionModal, MorningReport } from './hud/Reports';
 import StoragePanel from './hud/StoragePanel';
 import TradePanel from './hud/TradePanel';
+import ProfileModal from './hud/ProfileModal';
 import { NpcCard, TankCard } from './hud/WorldCards';
 import { faceNorth, rotateStep, view, zoomBy } from './world/playerState';
 import { enableAudio, playClick, setAudioPreferences } from '../lib/audio';
@@ -37,14 +38,16 @@ const TIPS = {
 /** Phases: title (and boot, before storage is read) → intro → playing. The farm renders behind all of them. */
 export default function Game() {
   const phase = useSession(s => s.phase);
+  const theme = useGameStore(s => s.profile.theme);
   const music = useSettings(s => s.music), effects = useSettings(s => s.effects);
+  const musicVolume = useSettings(s => s.musicVolume), effectsVolume = useSettings(s => s.effectsVolume);
   // When the orientation setting disagrees with how the device is held, the whole game is turned with CSS.
   const turn = useScreenTurn(s => s.turn);
   // Storage is only read on the client, after hydration, so the server and first client render match.
   useEffect(() => { boot(); }, []);
   useEffect(() => {
-    setAudioPreferences(music, effects);
-  }, [music, effects]);
+    setAudioPreferences(music, effects, musicVolume, effectsVolume);
+  }, [music, effects, musicVolume, effectsVolume]);
   useEffect(() => {
     const onPointerDown = () => enableAudio();
     const onClick = (event: MouseEvent) => {
@@ -52,13 +55,15 @@ export default function Game() {
     };
     window.addEventListener('pointerdown', onPointerDown, { once: true });
     window.addEventListener('click', onClick);
-    return () => { window.removeEventListener('pointerdown', onPointerDown); window.removeEventListener('click', onClick); };
+    const onKey = (event: KeyboardEvent) => { if (event.key.toLowerCase() === 'm' && !event.metaKey && !event.ctrlKey && !event.altKey) setMusic(!useSettings.getState().music); };
+    window.addEventListener('keydown', onKey);
+    return () => { window.removeEventListener('pointerdown', onPointerDown); window.removeEventListener('click', onClick); window.removeEventListener('keydown', onKey); };
   }, []);
   // Highlight the HUD control the current tutorial step is about (see `data-tut` attributes).
   const control = useGameStore(s => (s.story ? null : currentStep(s.tutorial)?.control ?? null));
   const turnClass = turn === 90 ? 'turn-cw' : turn === -90 ? 'turn-ccw' : '';
   return (
-    <div className={`game-shell ${turnClass} ${phase === 'playing' && control ? `tut-${control}` : ''}`}>
+    <div className={`game-shell ${turnClass} ${phase === 'playing' && control ? `tut-${control}` : ''}`} data-theme={theme}>
       <div className="canvas-wrap"><FarmScene /></div>
       {phase === 'playing' && <Hud />}
       {(phase === 'boot' || phase === 'title') && <TitleScreen />}
@@ -115,7 +120,10 @@ function Hud() {
   return (
     <div className="hud">
       <header className="topbar">
-        <div className="brand"><small>HARVEST TO HARBOR</small>NIGERIA</div>
+        <div className="brand brand-btn" role="button" tabIndex={0} onClick={s.openProfile} title="Personalize your farm and farmer">
+          <small>{s.profile.emblem} {s.profile.farmName}</small>
+          HARVEST TO HARBOR
+        </div>
         <div className="stats">
           <div className="stat"><span>Cash <Tip text={TIPS.cash} /></span><b>{money(s.cash)}</b></div>
           <div className="stat"><span>Day <Tip text={TIPS.day} /></span><b>{s.day}</b></div>
@@ -133,7 +141,7 @@ function Hud() {
 
       <section className={`side ${compact ? 'compact' : ''} ${tutorialOn ? 'with-tutorial' : ''}`}>
         <button className="collapse" onClick={() => setCompact(!compact)} aria-label={compact ? 'Expand panel' : 'Collapse panel'}>{compact ? '▸' : '▾'}</button>
-        <div className="eyebrow">Season 01 · Ginger · Kafanchan</div>
+        <div className="eyebrow">Season 01 · {s.profile.farmerName} · Kafanchan</div>
         <XpBar />
         <TutorialCard />
         <MissionCard />
@@ -212,7 +220,8 @@ function Hud() {
       <InspectionModal />
       <StoryCard />
       <LevelUpCard />
-      {menu && <GameMenu onClose={() => setMenu(false)} />}
+      {menu && <GameMenu onClose={() => setMenu(false)} onOpenProfile={s.openProfile} />}
+      {s.customizingProfile && <ProfileModal onClose={s.closeProfile} />}
       {confirmNew && (
         <ConfirmDialog title="Start a new season?" confirm="Start new season" danger onCancel={() => setConfirmNew(false)} onConfirm={() => { setConfirmNew(false); startNewSeason(); }}>
           <p>Your current farm (day {s.day}, {money(s.cash)}, level {s.level}) will be replaced. This can&apos;t be undone.</p>

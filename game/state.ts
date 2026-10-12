@@ -1,12 +1,12 @@
 import {
-  BASE_ENERGY, BASE_PRICES, FX_BASE, FUEL_PRICE, PLOT_COLS, PLOT_ROWS, PREP, STARTING_CASH, TANK_BASE_LITRES, TANK_UPGRADE_LITRES,
+  BASE_ENERGY, BASE_PRICES, DEFAULT_PROFILE, FX_BASE, FUEL_PRICE, PLOT_COLS, PLOT_ROWS, PREP, STARTING_CASH, TANK_BASE_LITRES, TANK_UPGRADE_LITRES,
   WAREHOUSE_BASE_KG, WAREHOUSE_UPGRADE_KG, WORKER_ENERGY,
 } from './config';
 import { createRng } from './rng';
 import { initialMissions } from './campaign';
 import { describeLevelUp, levelFromXp } from './levels';
 import { CAMPAIGN } from './missions';
-import type { GameState, LogLine, Plot } from './types';
+import type { GameState, LogLine, PlayerProfile, Plot } from './types';
 import { buildForecast, initialWeatherQueue } from './weather';
 
 const LOG_LIMIT = 60;
@@ -44,7 +44,9 @@ export function initialState(seed = 20261010): GameState {
     day: 1, cash: STARTING_CASH, energy: BASE_ENERGY, xp: 0, reputation: 10, level: 1,
     rng: rng.state(),
     plots: createInitialPlots(), batches: [], dryingJobs: [], nextId: 1,
-    water: TANK_BASE_LITRES, workers: 0,
+    water: TANK_BASE_LITRES, irrigationCondition: 100,
+    automation: { irrigationThreshold: 45, irrigationDailyLimit: 4, autoPump: false, autoFertilize: false, fertilizerDailyLimit: 2, autoCoverRacks: false },
+    workers: 0,
     upgrades: { irrigation: false, warehouseLevel: 0, tankLevel: 0, insurance: false, mill: false, solarDryer: false, factory: false, landLeased: 0 },
     weather: 'sunny', weatherQueue, forecast,
     market: { ...BASE_PRICES }, fxRate: FX_BASE, priceHistory: [{ day: 1, ...BASE_PRICES }],
@@ -58,6 +60,7 @@ export function initialState(seed = 20261010): GameState {
     story: { speaker: CAMPAIGN[0].npc, title: `Mission 1: ${CAMPAIGN[0].title}`, text: CAMPAIGN[0].intro },
     contracts: [], shipments: [], loans: [], creditBlocked: false, levelUp: null,
     toast: 'Welcome to your first ginger season.',
+    profile: { ...DEFAULT_PROFILE },
   };
 }
 
@@ -101,4 +104,8 @@ export function log(s: GameState, ...lines: LogLine[]): GameState {
 }
 export function updatePlot(s: GameState, id: number, patch: Partial<Plot>): GameState {
   return { ...s, plots: s.plots.map(p => (p.id === id ? { ...p, ...patch } : p)) };
+}
+
+export function updateProfile(s: GameState, patch: Partial<PlayerProfile>): GameState {
+  return { ...s, profile: { ...s.profile, ...patch }, toast: 'Profile updated.' };
 }

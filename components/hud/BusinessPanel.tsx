@@ -1,6 +1,6 @@
 'use client';
 import {
-  BANK_LOANS, EQUIPMENT_FINANCE, HIRE_COST, INSURANCE_PREMIUM, UPGRADES, WAGE_PER_DAY, WORKER_ENERGY, availableWorkers, cashForecast,
+  BANK_LOANS, EQUIPMENT_FINANCE, HIRE_COST, INSURANCE_PREMIUM, IRRIGATION_REPAIR_COST, UPGRADES, WAGE_PER_DAY, WORKER_ENERGY, availableWorkers, cashForecast,
   creditLimit, dailyFixedCosts, loanBlocked, lockedReason, maintenanceCost, maxWorkers, money, ownsUpgrade, tankCapacity, totalDebt,
   upgradeBlocked, warehouseCapacity, type CashPoint, type UpgradeId,
 } from '../../game/simulation';
@@ -53,6 +53,23 @@ export default function BusinessPanel() {
       <span>Spent on logistics {money(f.logistics)}</span>
       <span>Interest paid {money(f.interest)}</span>
     </div>
+
+    <h4>Farm automation</h4>
+    <div className="upgrade">
+      <div>
+        <b>Drip controller{s.upgrades.irrigation ? ` · ${Math.round(s.irrigationCondition)}% condition` : ''}</b>
+        {s.upgrades.irrigation ? <small>Water dry beds below {s.automation.irrigationThreshold}% moisture, up to {s.automation.irrigationDailyLimit} beds each morning.</small> : <small>Install drip irrigation to enable automatic watering.</small>}
+      </div>
+      {s.upgrades.irrigation && <button onClick={s.repairIrrigation} disabled={s.irrigationCondition >= 100 || s.cash < IRRIGATION_REPAIR_COST}>Service {money(IRRIGATION_REPAIR_COST)}</button>}
+    </div>
+    {s.upgrades.irrigation && <div className="automation-controls">
+      <label>Water at <b>{s.automation.irrigationThreshold}%</b><input type="range" min="25" max="60" step="5" value={s.automation.irrigationThreshold} onChange={e => s.configureAutomation({ irrigationThreshold: Number(e.target.value) })} /></label>
+      <label>Daily beds <b>{s.automation.irrigationDailyLimit}</b><input type="range" min="1" max="8" step="1" value={s.automation.irrigationDailyLimit} onChange={e => s.configureAutomation({ irrigationDailyLimit: Number(e.target.value) })} /></label>
+      <label className="check"><input type="checkbox" checked={s.automation.autoPump} onChange={e => s.configureAutomation({ autoPump: e.target.checked })} /> Auto-pump an empty tank</label>
+      <label className="check"><input type="checkbox" checked={s.automation.autoFertilize} onChange={e => s.configureAutomation({ autoFertilize: e.target.checked })} /> Fertilize dry, low-fertility beds</label>
+      {s.automation.autoFertilize && <label>Fertilizer beds <b>{s.automation.fertilizerDailyLimit}</b><input type="range" min="1" max="6" step="1" value={s.automation.fertilizerDailyLimit} onChange={e => s.configureAutomation({ fertilizerDailyLimit: Number(e.target.value) })} /></label>}
+      <label className="check"><input type="checkbox" checked={s.automation.autoCoverRacks} onChange={e => s.configureAutomation({ autoCoverRacks: e.target.checked })} /> Cover drying racks in rain</label>
+    </div>}
 
     <h4>Loans</h4>
     {s.loans.map(l => (

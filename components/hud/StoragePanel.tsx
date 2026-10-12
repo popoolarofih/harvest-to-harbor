@@ -163,7 +163,7 @@ export default function StoragePanel() {
     {dried.map(b => (
       <div key={b.id} className="batch">
         <div className="batch-head"><b>Batch #{b.id} · {Math.round(b.kg).toLocaleString()} kg</b>{gradeChip(b)}</div>
-        <small className="muted">Moisture {b.moisture.toFixed(1)}% · quality {Math.round(b.quality)}/100 · {b.packaging ? PACKAGING[b.packaging].label.toLowerCase() : 'loose'}{isExportReady(b) ? ' · ✈ export-ready' : ''} <button className="link" onClick={() => s.inspectBatch(b.id)}>Inspect</button></small>
+        <small className="muted">Moisture {b.moisture.toFixed(1)}% · quality {Math.round(b.quality)}/100 · {b.packaging ? PACKAGING[b.packaging].label.toLowerCase() : 'loose'}{isExportReady(b) ? <> · ✈ export-ready <span className="brand-tag">★ {s.profile.exportBrand}</span></> : ''} <button className="link" onClick={() => s.inspectBatch(b.id)}>Inspect</button></small>
         {s.upgrades.mill ? <>
           {b.moisture > GRIND_MAX_MOISTURE && <div className="alert">Above {GRIND_MAX_MOISTURE}% moisture: powder will cake in the mill.</div>}
           <div className="action-grid">
@@ -181,7 +181,7 @@ export default function StoragePanel() {
     {powder.map(b => (
       <div key={b.id} className="batch">
         <div className="batch-head"><b>Powder #{b.id} · {Math.round(b.kg).toLocaleString()} kg</b>{gradeChip(b)}</div>
-        <small className="muted">Moisture {b.moisture.toFixed(1)}% · {b.packaging ? PACKAGING[b.packaging].label.toLowerCase() : ''}{isExportReady(b) ? ' · ✈ export-ready' : ''} <button className="link" onClick={() => s.inspectBatch(b.id)}>Inspect</button></small>
+        <small className="muted">Moisture {b.moisture.toFixed(1)}% · {b.packaging ? PACKAGING[b.packaging].label.toLowerCase() : ''}{isExportReady(b) ? <> · ✈ export-ready <span className="brand-tag">★ {s.profile.exportBrand}</span></> : ''} <button className="link" onClick={() => s.inspectBatch(b.id)}>Inspect</button></small>
         <BuyerButtons batch={b} />
       </div>
     ))}

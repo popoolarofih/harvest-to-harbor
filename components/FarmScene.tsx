@@ -2,7 +2,7 @@
 import { Canvas } from '@react-three/fiber';
 import { Suspense } from 'react';
 import Actors from './world/Actors';
-import { Farmhouse, ProcessingShed, Warehouse, WaterSystem } from './world/Buildings';
+import { Farmhouse, FarmSignboard, ProcessingShed, Warehouse, WaterSystem } from './world/Buildings';
 import Field from './world/Field';
 import { TutorialBeacon, WorldPrompt } from './world/Guides';
 import Nature from './world/Nature';
@@ -32,6 +32,7 @@ export default function FarmScene() {
         <Warehouse />
         <ProcessingShed />
         <WaterSystem />
+        <FarmSignboard />
         <Actors />
       </Suspense>
       <TutorialBeacon />

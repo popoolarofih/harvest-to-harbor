@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { SAFE_MOISTURE } from '../../game/simulation';
 import { useSaveStatus } from '../../stores/persistence';
-import { resetSave, rotateScreen, setEffects, setMotion, setMusic, setOrientation, toTitle, useSession, useSettings, type MotionPref, type OrientationPref } from '../../stores/session';
+import { resetSave, rotateScreen, setEffects, setEffectsVolume, setMotion, setMusic, setMusicVolume, setOrientation, toTitle, useSession, useSettings, type MotionPref, type OrientationPref } from '../../stores/session';
 
 /** "Saved just now" / "Saved at 14:05" / "Saved 3 Oct, 14:05". */
 export function savedLabel(at: number | null, now = Date.now()) {
@@ -85,6 +85,8 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
   const orientation = useSettings(s => s.orientation);
   const music = useSettings(s => s.music);
   const effects = useSettings(s => s.effects);
+  const musicVolume = useSettings(s => s.musicVolume);
+  const effectsVolume = useSettings(s => s.effectsVolume);
   const savedAt = useSaveStatus(s => s.savedAt), error = useSaveStatus(s => s.error);
   const save = useSession(s => s.save);
   const [confirmReset, setConfirmReset] = useState(false);
@@ -111,6 +113,10 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
           <button role="switch" aria-checked={music} className={music ? 'on' : ''} onClick={() => setMusic(!music)}>Music</button>
           <button role="switch" aria-checked={effects} className={effects ? 'on' : ''} onClick={() => setEffects(!effects)}>Sound effects</button>
         </div>
+        <div className="audio-levels">
+          <label>Music volume <input type="range" min="0" max="1" step="0.05" value={musicVolume} onChange={e => setMusicVolume(Number(e.target.value))} /></label>
+          <label>Effects volume <input type="range" min="0" max="1" step="0.05" value={effectsVolume} onChange={e => setEffectsVolume(Number(e.target.value))} /></label>
+        </div>
         <h4>Your saved farm</h4>
         <p className="small">
           {save?.kind === 'unavailable' ? 'This browser is blocking site storage, so the game can\'t save here.' : hasSave ? `${savedLabel(savedAt)}. ` : 'No saved farm yet. '}
@@ -130,7 +136,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
 }
 
 /** The in-game ☰ menu: help, settings, and a way back to the title screen. */
-export function GameMenu({ onClose }: { onClose: () => void }) {
+export function GameMenu({ onClose, onOpenProfile }: { onClose: () => void; onOpenProfile?: () => void }) {
   const [view, setView] = useState<'menu' | 'help' | 'settings'>('menu');
   useEscape(view === 'menu' ? onClose : noop);
   if (view === 'help') return <HowToPlay onClose={() => setView('menu')} />;
@@ -143,6 +149,11 @@ export function GameMenu({ onClose }: { onClose: () => void }) {
         <SaveIndicator />
         <div className="menu-list">
           <button className="action primary" onClick={onClose}><strong>Resume</strong></button>
+          {onOpenProfile && (
+            <button id="menu-profile" className="action" onClick={() => { onClose(); onOpenProfile(); }}>
+              <strong>🎨 Personalize Farm &amp; Farmer</strong>
+            </button>
+          )}
           <button className="action" onClick={() => setView('help')}><strong>How to play</strong></button>
           <button className="action" onClick={() => setView('settings')}><strong>Settings</strong></button>
           <button id="menu-rotate-screen" className="action" onClick={rotateScreen}><strong>📱 Rotate screen</strong></button>
@@ -188,6 +199,10 @@ export function HowToPlay({ onClose }: { onClose: () => void }) {
           <section>
             <h4>💾 Saving</h4>
             <p>The game saves automatically to this browser after every meaningful action and each night. Use <b>Continue Farming</b> on the title screen to pick up where you left off.</p>
+          </section>
+          <section>
+            <h4>🎨 Personalization</h4>
+            <p>Customize your farmer&apos;s name, outfit, skin tone, entrance signboard, and export packaging brand by clicking your farm name in the top bar, clicking the entrance signboard, or via the ☰ menu.</p>
           </section>
         </div>
       </div>

@@ -5,7 +5,7 @@ import { useMemo, useRef } from 'react';
 import { CanvasTexture, RepeatWrapping, SRGBColorSpace, Shape, type Group, type Mesh } from 'three';
 import { SAFE_MOISTURE, storedKg, warehouseCapacity } from '../../game/simulation';
 import { useGameStore } from '../../stores/gameStore';
-import { BOREHOLE_POS, BUILDINGS, PLOT_SPACING, TANK_POS, plotPosition } from './layout';
+import { BOREHOLE_POS, BUILDINGS, PLOT_SPACING, SIGNBOARD_POS, TANK_POS, plotPosition } from './layout';
 import { Model } from './models';
 
 function useCanvasTexture(draw: (ctx: CanvasRenderingContext2D, size: number) => void, repeat: [number, number]) {
@@ -207,6 +207,38 @@ export function Okada(props: { position?: [number, number, number]; rotation?: [
       <mesh position={[0, 0.82, -0.12]}><boxGeometry args={[0.26, 0.1, 0.55]} /><meshStandardMaterial color="#111" /></mesh>
       <mesh position={[0, 0.95, 0.5]} rotation={[0, 0, Math.PI / 2]}><cylinderGeometry args={[0.025, 0.025, 0.7, 6]} /><meshStandardMaterial color="#aaa" metalness={0.8} /></mesh>
       <mesh position={[0, 0.75, 0.55]} rotation={[0.35, 0, 0]}><cylinderGeometry args={[0.03, 0.03, 0.5, 6]} /><meshStandardMaterial color="#aaa" metalness={0.8} /></mesh>
+    </group>
+  );
+}
+
+/** Wooden signboard at the farm entrance displaying the customized farm name and emblem. */
+export function FarmSignboard() {
+  const profile = useGameStore(s => s.profile);
+  const [x, y, z] = SIGNBOARD_POS;
+  return (
+    <group position={[x, y, z]} rotation={[0, Math.PI * 0.45, 0]}>
+      <mesh position={[0, 0.9, 0]} castShadow>
+        <cylinderGeometry args={[0.07, 0.08, 1.8, 8]} />
+        <meshStandardMaterial color="#5c432d" roughness={0.8} />
+      </mesh>
+      <mesh position={[0, 1.45, 0]} castShadow receiveShadow>
+        <boxGeometry args={[2.2, 0.85, 0.1]} />
+        <meshStandardMaterial color="#2d1e13" roughness={0.7} />
+      </mesh>
+      <mesh position={[0, 1.45, 0.055]}>
+        <boxGeometry args={[2.26, 0.91, 0.02]} />
+        <meshStandardMaterial color="#8a5e3b" roughness={0.6} />
+      </mesh>
+      <mesh position={[0, 1.45, 0.06]}>
+        <planeGeometry args={[2.1, 0.75]} />
+        <meshStandardMaterial color="#1f160e" roughness={0.9} />
+      </mesh>
+      <Text position={[0, 1.6, 0.08]} fontSize={0.19} color="#ffd25a" outlineWidth={0.015} outlineColor="#140d06" anchorX="center" anchorY="middle">
+        {`${profile.emblem} ${profile.farmName}`}
+      </Text>
+      <Text position={[0, 1.34, 0.08]} fontSize={0.12} color="#e5dfcf" outlineWidth={0.01} outlineColor="#140d06" anchorX="center" anchorY="middle">
+        Southern Kaduna · Ginger Farmland
+      </Text>
     </group>
   );
 }

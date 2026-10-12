@@ -1,4 +1,5 @@
-import type { CutStyle, IssueKind, Packaging, PrepMethod, Product, QualityGrade, SeedTier, SortLevel, WashMethod, Weather } from './types';
+import type { CutStyle, IssueKind, Packaging, PlayerProfile, PrepMethod, Product, QualityGrade, SeedTier, SortLevel, ThemeId, WashMethod, Weather } from './types';
+export type { PlayerProfile, ThemeId } from './types';
 
 // Values are tuned for gameplay and loosely anchored to Southern Kaduna ginger farming.
 // They are not live prices or agronomic advice.
@@ -32,6 +33,7 @@ export const FERTILIZER_COST = 4_000;
 export const FERTILIZER_GAIN = 35;
 export const WATER_PER_PLOT = 400;
 export const WATER_MOISTURE_GAIN = 25;
+export const IRRIGATION_REPAIR_COST = 6_000;
 export const TANK_BASE_LITRES = 4_000;
 export const TANK_UPGRADE_LITRES = 3_000;
 export const LITRES_PER_FUEL_LITRE = 700;
@@ -178,5 +180,25 @@ export const WEATHER_INFO: Record<Weather, { label: string; icon: string; moistu
 };
 /** Ordered dry → wet so a forecast "miss" lands on a neighbouring kind of weather. */
 export const WEATHER_SCALE: Weather[] = ['heatwave', 'sunny', 'cloudy', 'rain', 'heavyRain', 'storm'];
+
+export const DEFAULT_PROFILE: PlayerProfile = {
+  farmerName: 'Bala',
+  farmName: 'Kafanchan Green Acres',
+  exportBrand: 'Naija Sun Spices',
+  avatar: 'male-e',
+  skinTone: 0,
+  emblem: '🌱',
+  theme: 'emerald',
+};
+
+export const EMBLEMS = ['🌱', '🌾', '☀️', '👑', '🦅', '🚢', '⚡', '⭐', '🌿', '🚜', '🏆', '💎'] as const;
+
+export const THEMES: Record<ThemeId, { label: string; primary: string; secondary: string; bg: string }> = {
+  emerald: { label: 'Nigerian Emerald', primary: '#b4e16e', secondary: '#5d8f48', bg: '#172719' },
+  gold: { label: 'Harvest Gold', primary: '#ffd25a', secondary: '#c08a12', bg: '#29200f' },
+  terracotta: { label: 'Terracotta Earth', primary: '#e69b52', secondary: '#b56729', bg: '#291811' },
+  indigo: { label: 'Harbor Indigo', primary: '#7fc3ef', secondary: '#3a7ab5', bg: '#102231' },
+  palm: { label: 'Palm River', primary: '#5eead4', secondary: '#14b8a6', bg: '#0e2622' },
+};
 export const WEATHER_BASE_WEIGHTS: Record<Weather, number> = { sunny: 0.3, cloudy: 0.26, rain: 0.22, heavyRain: 0.1, storm: 0.06, heatwave: 0.06 };
 export const FORECAST_ACCURACY = [0.95, 0.85, 0.7, 0.55, 0.45];

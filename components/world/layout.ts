@@ -29,12 +29,15 @@ export const NPC_SPOTS: Record<NpcId, { pos: [number, number, number]; facing: n
   chinedu: { pos: [-5.2, 0, -2.8], facing: Math.PI * 0.25, variant: 'male-c', tone: 3 },
 };
 
+export const SIGNBOARD_POS = [-9.2, 0, -6.8] as const;
+
 export const STATIONS: Record<StationId, { pos: [number, number, number]; radius: number; label: string }> = {
   office: { pos: [-3.5, 0, -10.8], radius: 1.7, label: 'Open the farm office (business)' },
   warehouse: { pos: [4.5, 0, -10.6], radius: 1.9, label: 'Check the warehouse (storage & sales)' },
   shed: { pos: [11, 0, -6], radius: 3, label: 'Work the processing shed (drying)' },
   tank: { pos: [11.6, 0, 2.2], radius: 2, label: 'Use the water tank & borehole' },
   truck: { pos: [-7.2, 0, -4.5], radius: 2.5, label: 'Load the truck (buyers & market)' },
+  signboard: { pos: [-9.2, 0, -6.8], radius: 2.2, label: 'Farm signboard (identity & branding)' },
 };
 
 export const PLOT_RADIUS = 1.25;

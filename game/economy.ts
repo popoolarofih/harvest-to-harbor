@@ -1,6 +1,6 @@
 import {
   BUYERS, CUT, DRYING_COST_PER_KG, DRYING_RACK_KG, ENERGY, FACTORY_SEALED_DISCOUNT, GRIND_COST_PER_KG, GRIND_FUEL_PER_KG, GRIND_MAX_MOISTURE, GRIND_YIELD,
-  HIRE_COST, LITRES_PER_FUEL_LITRE, MAX_LAND_LEASES, PACKAGING, SAFE_MOISTURE, SORT, UPGRADES, WASH, WATER_PER_PLOT, WORKER_ENERGY, type UpgradeId,
+  HIRE_COST, IRRIGATION_REPAIR_COST, LITRES_PER_FUEL_LITRE, MAX_LAND_LEASES, PACKAGING, SAFE_MOISTURE, SORT, UPGRADES, WASH, WATER_PER_PLOT, WORKER_ENERGY, type UpgradeId,
 } from './config';
 import { lockedReason, maxWorkers, type UnlockId } from './levels';
 import { checkSale, gradeForBatch, gradeLabel, inspectBatchReport } from './quality';
@@ -198,6 +198,14 @@ export function buyUpgrade(s: GameState, id: UpgradeId): GameState {
     : '';
   next = log(next, { text: `Invested in ${u.label.toLowerCase()} (${money(u.cost)}).${installLine}`, severity: 'info' });
   return addXp({ ...next, toast: `${u.label} ready.${installLine}` }, 40);
+}
+
+export function repairIrrigation(s: GameState): GameState {
+  if (!s.upgrades.irrigation) return fail(s, 'Install drip irrigation before servicing it.');
+  if (s.irrigationCondition >= 100) return fail(s, 'Drip lines are already in good condition.');
+  if (s.cash < IRRIGATION_REPAIR_COST) return fail(s, `You need ${money(IRRIGATION_REPAIR_COST)} to service the drip lines.`);
+  const next = spend(s, IRRIGATION_REPAIR_COST);
+  return { ...next, irrigationCondition: 100, toast: `Drip lines serviced for ${money(IRRIGATION_REPAIR_COST)}. Automatic watering is ready.` };
 }
 
 export function toggleInsurance(s: GameState): GameState {

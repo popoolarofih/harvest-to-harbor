@@ -1,11 +1,12 @@
 // Versioned save format. Plain TypeScript (no browser APIs) so it can be unit-tested in node;
 // the browser storage adapter lives in stores/persistence.ts.
 import { CAMPAIGN } from './missions';
+import { DEFAULT_PROFILE } from './config';
 import { initialState } from './state';
 import { TUTORIAL_STATUSES, type TutorialProgress } from './tutorial';
 import type { GameState } from './types';
 
-export const SAVE_VERSION = 1;
+export const SAVE_VERSION = 3;
 export const SAVE_KEY = 'h2h.save';
 /** Where an unreadable save is copied before anything else may overwrite the main slot. */
 export const UNREADABLE_KEY = 'h2h.save.unreadable';
@@ -30,7 +31,30 @@ export type LoadResult =
 type Json = Record<string, unknown>;
 /** Step `n` upgrades a version-n save to version n + 1. Add one whenever the saved shape changes. */
 export type Migration = (data: Json) => Json;
-export const MIGRATIONS: Record<number, Migration> = {};
+export const MIGRATIONS: Record<number, Migration> = {
+  1: (data: Json) => {
+    const game = data.game as Json;
+    return {
+      ...data,
+      game: {
+        ...game,
+        profile: { ...DEFAULT_PROFILE, ...((game?.profile as Json) || {}) },
+      },
+    };
+  },
+  2: (data: Json) => {
+    const game = data.game as Json;
+    return {
+      ...data,
+      game: {
+        ...game,
+        irrigationCondition: typeof game?.irrigationCondition === 'number' ? game.irrigationCondition : 100,
+        automation: { irrigationThreshold: 45, irrigationDailyLimit: 4, autoPump: false, autoFertilize: false, fertilizerDailyLimit: 2, autoCoverRacks: false, ...((game?.automation as Json) || {}) },
+        lastReport: game?.lastReport ? { ...(game.lastReport as Json), automation: (game.lastReport as Json).automation ?? { irrigatedPlots: 0, irrigationLitres: 0, pumpedLitres: 0, pumpingCost: 0, fertilizedPlots: 0, fertilizerCost: 0, coveredRacks: 0, irrigationNeedsRepair: false } } : null,
+      },
+    };
+  },
+};
 
 export function serializeSave(game: GameState, meta: SaveMeta, now = Date.now()): string {
   const persisted: Json = { ...game };

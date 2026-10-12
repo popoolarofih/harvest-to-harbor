@@ -72,6 +72,21 @@ export interface DayReport {
   day: number; weather: Weather;
   lines: LogLine[];
   wages: number; insurance: number; payouts: number;
+  automation: AutomationSummary;
+}
+
+export interface AutomationSettings {
+  irrigationThreshold: number;
+  irrigationDailyLimit: number;
+  autoPump: boolean;
+  autoFertilize: boolean;
+  fertilizerDailyLimit: number;
+  autoCoverRacks: boolean;
+}
+
+export interface AutomationSummary {
+  irrigatedPlots: number; irrigationLitres: number; pumpedLitres: number; pumpingCost: number;
+  fertilizedPlots: number; fertilizerCost: number; coveredRacks: number; irrigationNeedsRepair: boolean;
 }
 
 export interface InspectionReport {
@@ -176,6 +191,18 @@ export interface LevelUp { level: number; title: string | null; unlocks: string[
 /** A line of story dialogue the HUD shows as a card until dismissed. */
 export interface Story { speaker: NpcId | null; title: string; text: string; }
 
+export type ThemeId = 'emerald' | 'gold' | 'terracotta' | 'indigo' | 'palm';
+
+export interface PlayerProfile {
+  farmerName: string;
+  farmName: string;
+  exportBrand: string;
+  avatar: string;
+  skinTone: number;
+  emblem: string;
+  theme: ThemeId;
+}
+
 export interface GameState {
   day: number; cash: number; energy: number; xp: number; reputation: number; level: number;
   /** Seeded RNG state. All randomness flows through it so a run is reproducible. */
@@ -186,6 +213,9 @@ export interface GameState {
   nextId: number;
   /** Litres in the farm water tank. */
   water: number;
+  /** 0-100. Dirty emitters eventually stop the automatic drip lines until repaired. */
+  irrigationCondition: number;
+  automation: AutomationSettings;
   workers: number;
   upgrades: Upgrades;
   weather: Weather;
@@ -215,4 +245,5 @@ export interface GameState {
   creditBlocked: boolean;
   levelUp: LevelUp | null;
   toast: string;
+  profile: PlayerProfile;
 }

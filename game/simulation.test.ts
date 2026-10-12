@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   BASE_ENERGY, BUYERS, PREP, SEEDS, WAGE_PER_DAY, WORKER_ENERGY, advanceDay, buyUpgrade, checkSale, expectedYieldKg, fertilizePlot,
   finishDrying, gradeForBatch, harvestPlot, hireWorker, initialState, inspectPlot, plantPlot, preparePlot, pumpWater, sellBatch,
-  startDrying, toggleCover, treatPlot, valueOptions, waterPlot,
+  repairIrrigation, startDrying, toggleCover, treatPlot, valueOptions, waterPlot,
 } from './simulation';
 import type { Batch, GameState, Plot, Weather } from './types';
 
@@ -220,6 +220,20 @@ describe('money and labour', () => {
     const installed = buyUpgrade(base, 'irrigation');
     expect(installed.plots[0].moisture).toBe(55);
     expect(installed.water).toBe(base.water - 400);
+  });
+  it('runs configured pumping, fertilising and rack-cover automation in the morning', () => {
+    let s = withPlot(initialState(), 0, { status: 'growing', seed: 'improved', growth: 30, moisture: 20, fertility: 20 });
+    s = { ...s, water: 0, upgrades: { ...s.upgrades, irrigation: true }, automation: { ...s.automation, autoPump: true, autoFertilize: true, autoCoverRacks: true }, dryingJobs: [{ id: 99, freshKg: 100, dryMatterKg: 20, moisture: 50, quality: 80, days: 1, covered: false, rate: 1, soiled: false }] };
+    const pumped = advanceDay(withWeather(s, 'sunny'));
+    expect(pumped.lastReport?.automation.pumpedLitres).toBeGreaterThan(0);
+    expect(pumped.lastReport?.automation.irrigatedPlots).toBe(1);
+    expect(pumped.lastReport?.automation.fertilizedPlots).toBe(1);
+    const covered = advanceDay(withWeather(pumped, 'rain'));
+    expect(covered.lastReport?.automation.coveredRacks).toBe(1);
+  });
+  it('clogged irrigation is restored by a service visit', () => {
+    const s = { ...initialState(), upgrades: { ...initialState().upgrades, irrigation: true }, irrigationCondition: 10 };
+    expect(repairIrrigation(s).irrigationCondition).toBe(100);
   });
 });
 

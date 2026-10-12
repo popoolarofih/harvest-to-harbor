@@ -44,7 +44,16 @@ function DispatchForm({ c }: { c: Contract }) {
           </button>
         ))}
       </div>
-      {isExport(c) && <label className={`check ${insuranceLock ? 'locked' : ''}`}><input type="checkbox" checked={insured} disabled={!!insuranceLock} onChange={e => setInsured(e.target.checked)} /> Cargo insurance (2% of value){insuranceLock ? ` · ${insuranceLock}` : ''}</label>}
+      {isExport(c) && (
+        <>
+          <div className="brand-dispatch-badge">
+            📦 Certified Export Lot: <strong>{s.profile.exportBrand}</strong> · Packed at {s.profile.farmName}
+          </div>
+          <label className={`check ${insuranceLock ? 'locked' : ''}`}>
+            <input type="checkbox" checked={insured} disabled={!!insuranceLock} onChange={e => setInsured(e.target.checked)} /> Cargo insurance (2% of value){insuranceLock ? ` · ${insuranceLock}` : ''}
+          </label>
+        </>
+      )}
       <div className="costs">
         <span>Haulage {money(costs.haulage)}</span>
         {costs.exportFees > 0 && <span>Export documents, phytosanitary & port {money(costs.exportFees)}</span>}
@@ -64,7 +73,15 @@ function ShipmentCard({ sh }: { sh: Shipment }) {
   const b = buyerOf(c);
   return (
     <div className="batch shipment">
-      <div className="batch-head"><b>{b.flag} {sh.kg.toLocaleString()} kg to {b.name}</b><span>{STAGE[sh.stage]}{sh.daysLeft > 0 ? ` · ${sh.daysLeft}d` : ''}</span></div>
+      <div className="batch-head">
+        <b>{b.flag} {sh.kg.toLocaleString()} kg to {b.name}</b>
+        <span>{STAGE[sh.stage]}{sh.daysLeft > 0 ? ` · ${sh.daysLeft}d` : ''}</span>
+      </div>
+      {isExport(c) && (
+        <div style={{ margin: '2px 0 6px' }}>
+          <span className="brand-tag">★ {s.profile.exportBrand} Export Lot</span>
+        </div>
+      )}
       <JourneyMap shipment={sh} buyer={b} />
       <ul className="ship-events">{[...sh.events].reverse().slice(0, 5).map((e, i) => <li key={i} className={e.severity}><small>Day {e.day}</small> {e.text}</li>)}</ul>
       {sh.stage === 'delivered' && sh.payDay !== null && <small className="muted">Payment expected on day {sh.payDay}.</small>}

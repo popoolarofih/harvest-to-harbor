@@ -11,7 +11,7 @@ import {
 } from './state';
 import type { ActiveEvent, Batch, GameState, IssueKind, LogLine, Plot, Product, Weather } from './types';
 import { buildForecast, isWet, nextWeather } from './weather';
-import { autoIrrigate } from './irrigation';
+import { runAutomation } from './automation';
 
 const ISSUE_GROWTH: Record<IssueKind, number> = { pest: 4, leafSpot: 4, rot: 5 };
 const PRICE_HISTORY_DAYS = 30;
@@ -40,7 +40,7 @@ export function advanceDay(s: GameState): GameState {
   st = tickContracts(st, rng, lines);
   st = tickShipments(st, rng, lines);
 
-  const report = { day: st.day, weather, lines, wages: paid.wages, insurance: paid.premium, payouts: paid.payout };
+  const report = { day: st.day, weather, lines, wages: paid.wages, insurance: paid.premium, payouts: paid.payout, automation: grown.automation };
   st = { ...st, forecast: buildForecast(rng, weatherQueue, st.day), rng: rng.state(), lastReport: report };
   st = { ...st, energy: maxEnergy(st) };
   st = log(st, ...lines.filter(l => l.severity !== 'info'));
@@ -107,12 +107,16 @@ function growPlots(s: GameState, rng: Rng, weather: Weather, lines: LogLine[]) {
   let insuredLoss = 0, stormHit = 0;
   const waterlogged: string[] = [], dry: string[] = [], poorStand: string[] = [], matured: string[] = [], visible: string[] = [], died: string[] = [];
 
-  let plots = s.plots.map((orig): Plot => {
+  const weatheredPlots = s.plots.map(orig => {
+    const drainage = effectiveDrainage(orig);
+    let moisture = orig.moisture + info.moisture - (orig.status === 'growing' ? 2 : 0);
+    if (moisture > 55) moisture -= (moisture - 55) * drainage * 0.5;
+    return { ...orig, moisture: clamp(moisture, 5, 100) };
+  });
+  const automated = runAutomation({ ...s, plots: weatheredPlots }, weather, rng);
+  let plots = automated.state.plots.map((orig): Plot => {
     const p = { ...orig };
     const drainage = effectiveDrainage(p);
-    let m = p.moisture + info.moisture - (p.status === 'growing' ? 2 : 0);
-    if (m > 55) m -= (m - 55) * drainage * 0.5;
-    p.moisture = clamp(m, 5, 100);
     if ((p.status !== 'growing' && p.status !== 'ready') || !p.seed) return p;
     const seed = SEEDS[p.seed];
 
@@ -186,9 +190,12 @@ function growPlots(s: GameState, rng: Rng, weather: Weather, lines: LogLine[]) {
     return { ...p, issue: { kind: source.issue!.kind, severity: 8, detected: false } };
   });
 
-  const irrigation = autoIrrigate({ ...s, plots });
-  plots = irrigation.state.plots;
-  if (irrigation.irrigated) lines.push({ text: `Drip irrigation watered ${irrigation.irrigated} plot${irrigation.irrigated > 1 ? 's' : ''} (${(irrigation.irrigated * WATER_PER_PLOT).toLocaleString()} L).`, severity: 'info' });
+  const automation = automated.summary;
+  if (automation.pumpedLitres) lines.push({ text: `Automation ran the borehole: ${automation.pumpedLitres.toLocaleString()} L added for ${money(automation.pumpingCost)}.`, severity: 'info' });
+  if (automation.irrigatedPlots) lines.push({ text: `Drip irrigation watered ${automation.irrigatedPlots} plot${automation.irrigatedPlots > 1 ? 's' : ''} (${automation.irrigationLitres.toLocaleString()} L).`, severity: 'info' });
+  if (automation.fertilizedPlots) lines.push({ text: `Automation fertilized ${automation.fertilizedPlots} low-fertility plot${automation.fertilizedPlots > 1 ? 's' : ''} (${money(automation.fertilizerCost)}).`, severity: 'info' });
+  if (automation.coveredRacks) lines.push({ text: `Automation covered ${automation.coveredRacks} drying rack${automation.coveredRacks > 1 ? 's' : ''} before the rain.`, severity: 'good' });
+  if (automation.irrigationNeedsRepair) lines.push({ text: 'Drip lines are clogged and need repair before automatic watering can continue.', severity: 'warning' });
   if (stormHit) lines.push({ text: `Storm winds battered ${stormHit} plot${stormHit > 1 ? 's' : ''}, tearing leaves and costing health.`, severity: 'danger' });
   if (waterlogged.length) lines.push({ text: `Waterlogged: ${list(waterlogged)}. Ridged beds drain faster; rot risk is up.`, severity: 'warning' });
   if (dry.length) lines.push({ text: `Drought stress: ${list(dry)}. Water these plots.`, severity: 'warning' });
@@ -196,7 +203,7 @@ function growPlots(s: GameState, rng: Rng, weather: Weather, lines: LogLine[]) {
   if (visible.length) lines.push({ text: `Visible damage on ${list(visible)}. Inspect and treat before it spreads.`, severity: 'danger' });
   if (matured.length) lines.push({ text: `Ready to harvest: ${list(matured)}. Waiting adds a little yield but raises rot and storm risk.`, severity: 'good' });
   if (died.length) lines.push({ text: `Crop lost on ${list(died)}. Check plots regularly: problems start hidden.`, severity: 'danger' });
-  return { state: irrigation.state, insuredLoss };
+  return { state: { ...automated.state, plots }, insuredLoss, automation };
 }
 
 function ageStock(s: GameState, weather: Weather, lines: LogLine[]): GameState {

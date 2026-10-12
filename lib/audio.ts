@@ -4,6 +4,8 @@ let context: AudioContext | null = null;
 let musicTimer: ReturnType<typeof setInterval> | null = null;
 let musicOn = true;
 let effectsOn = true;
+let musicVolume = 1;
+let effectsVolume = 1;
 let beat = 0;
 
 function getContext() {
@@ -34,8 +36,8 @@ function playPhrase() {
   const root = [130.81, 146.83, 174.61, 146.83];
   const now = ctx.currentTime + 0.03;
   const note = melody[beat % melody.length];
-  tone(note, now, 0.32, 0.018, 'triangle');
-  if (beat % 2 === 0) tone(root[Math.floor(beat / 2) % root.length], now, 0.48, 0.012, 'sine');
+  tone(note, now, 0.32, 0.018 * musicVolume, 'triangle');
+  if (beat % 2 === 0) tone(root[Math.floor(beat / 2) % root.length], now, 0.48, 0.012 * musicVolume, 'sine');
   beat++;
 }
 
@@ -50,9 +52,11 @@ function syncMusic() {
   musicTimer = setInterval(playPhrase, 480);
 }
 
-export function setAudioPreferences(music: boolean, effects: boolean) {
+export function setAudioPreferences(music: boolean, effects: boolean, musicLevel = 1, effectsLevel = 1) {
   musicOn = music;
   effectsOn = effects;
+  musicVolume = musicLevel;
+  effectsVolume = effectsLevel;
   syncMusic();
 }
 
@@ -65,6 +69,14 @@ export function playClick() {
   if (!effectsOn) return;
   const ctx = getContext();
   if (!ctx) return;
-  tone(640, ctx.currentTime, 0.045, 0.035, 'square');
-  tone(920, ctx.currentTime + 0.025, 0.035, 0.02, 'sine');
+  tone(640, ctx.currentTime, 0.045, 0.035 * effectsVolume, 'square');
+  tone(920, ctx.currentTime + 0.025, 0.035, 0.02 * effectsVolume, 'sine');
+}
+
+export function playAction(kind: 'water' | 'fertilize' | 'treat' | 'harvest' | 'pump' | 'prepare' | 'plant' | 'inspect' | 'process' | 'grind' | 'ship') {
+  if (!effectsOn) return;
+  const ctx = getContext();
+  if (!ctx) return;
+  const frequency = { water: 430, fertilize: 260, treat: 520, harvest: 330, pump: 150, prepare: 210, plant: 380, inspect: 700, process: 290, grind: 180, ship: 240 }[kind];
+  tone(frequency, ctx.currentTime, 0.12, 0.035 * effectsVolume, kind === 'water' || kind === 'inspect' ? 'sine' : 'triangle');
 }
