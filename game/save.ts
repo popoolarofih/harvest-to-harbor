@@ -49,7 +49,27 @@ export const MIGRATIONS: Record<number, Migration> = {
       game: {
         ...game,
         irrigationCondition: typeof game?.irrigationCondition === 'number' ? game.irrigationCondition : 100,
-        automation: { irrigationThreshold: 45, irrigationDailyLimit: 4, autoPump: false, autoFertilize: false, fertilizerDailyLimit: 2, autoCoverRacks: false, ...((game?.automation as Json) || {}) },
+        automation: {
+          irrigationThreshold: 45,
+          irrigationDailyLimit: 4,
+          autoPump: false,
+          autoFertilize: false,
+          fertilizerDailyLimit: 2,
+          autoCoverRacks: false,
+          fieldWorkers: 0,
+          autoPlant: false,
+          prepMethod: 'ridge',
+          plantSeed: 'improved',
+          autoMaintain: true,
+          autoWater: true,
+          autoTreat: true,
+          autoGapFill: true,
+          autoHarvest: false,
+          processingWorkers: 0,
+          autoOpenRacks: true,
+          autoBagRacks: false,
+          ...((game?.automation as Json) || {}),
+        },
         lastReport: game?.lastReport ? { ...(game.lastReport as Json), automation: (game.lastReport as Json).automation ?? { irrigatedPlots: 0, irrigationLitres: 0, pumpedLitres: 0, pumpingCost: 0, fertilizedPlots: 0, fertilizerCost: 0, coveredRacks: 0, irrigationNeedsRepair: false } } : null,
       },
     };
@@ -162,6 +182,26 @@ export function parseSave(raw: string | null, migrations: Record<number, Migrati
   if (version > target) return invalid(`the save is from a newer version of the game (v${version})`);
   let migrated: Json;
   try { migrated = migrate(data as Json, version, migrations, target); } catch (e) { return invalid(`the save can't be upgraded: ${(e as Error).message}`); }
+  if (migrated.game && typeof migrated.game === 'object') {
+    const g = migrated.game as Json;
+    if (g.automation && typeof g.automation === 'object') {
+      g.automation = {
+        fieldWorkers: 0,
+        autoPlant: false,
+        prepMethod: 'ridge',
+        plantSeed: 'improved',
+        autoMaintain: true,
+        autoWater: true,
+        autoTreat: true,
+        autoGapFill: true,
+        autoHarvest: false,
+        processingWorkers: 0,
+        autoOpenRacks: true,
+        autoBagRacks: false,
+        ...(g.automation as Json),
+      };
+    }
+  }
   const problem = validateGame(migrated.game) ?? validateMeta(migrated.meta);
   if (problem) return invalid(problem);
   return { kind: 'ok', save: migrated as unknown as SaveFile, migratedFrom: version === target ? null : version };

@@ -235,6 +235,63 @@ describe('money and labour', () => {
     const s = { ...initialState(), upgrades: { ...initialState().upgrades, irrigation: true }, irrigationCondition: 10 };
     expect(repairIrrigation(s).irrigationCondition).toBe(100);
   });
+  it('field labours automatically plant empty plots with chosen seed and prep', () => {
+    let s: GameState = {
+      ...initialState(),
+      workers: 2,
+      automation: { ...initialState().automation, fieldWorkers: 1, autoPlant: true, plantSeed: 'improved', prepMethod: 'ridge' },
+    };
+    const beforeCash = s.cash;
+    s = advanceDay(withWeather(s, 'sunny'));
+    const planted = s.plots.filter(p => p.status === 'growing' && p.seed === 'improved' && p.ridged);
+    expect(planted.length).toBe(8);
+    expect(s.lastReport?.automation.plantedPlots).toBe(8);
+    expect(s.cash).toBeLessThan(beforeCash);
+  });
+  it('field labours maintain crops by watering dry beds and treating diseases', () => {
+    let s: GameState = withPlot(initialState(), 0, {
+      status: 'growing', seed: 'improved', growth: 25, moisture: 20,
+      issue: { kind: 'pest', severity: 20, detected: false },
+    });
+    s = {
+      ...s,
+      workers: 1,
+      automation: { ...s.automation, fieldWorkers: 1, autoMaintain: true, autoWater: true, autoTreat: true },
+    };
+    s = advanceDay(withWeather(s, 'sunny'));
+    expect(s.plots[0].moisture).toBeGreaterThan(30);
+    expect(s.plots[0].issue).toBeNull();
+    expect(s.lastReport?.automation.treatedPlots).toBe(1);
+    expect(s.lastReport?.automation.wateredPlots).toBe(1);
+  });
+  it('processing workers automatically cover drying racks in rain and open them in sunny weather', () => {
+    let s: GameState = {
+      ...initialState(),
+      workers: 1,
+      dryingJobs: [{ id: 101, freshKg: 500, dryMatterKg: 100, moisture: 50, quality: 85, days: 1, covered: false, rate: 1, soiled: false }],
+      automation: { ...initialState().automation, processingWorkers: 1 },
+    };
+    s = advanceDay(withWeather(s, 'rain'));
+    expect(s.dryingJobs[0].covered).toBe(true);
+    expect(s.lastReport?.automation.coveredRacks).toBe(1);
+
+    s = advanceDay(withWeather(s, 'sunny'));
+    expect(s.dryingJobs[0].covered).toBe(false);
+    expect(s.lastReport?.automation.openedRacks).toBe(1);
+    expect(s.dryingJobs[0].moisture).toBeLessThan(50);
+  });
+  it('processing workers automatically bag dried ginger when autoBagRacks is enabled', () => {
+    let s: GameState = {
+      ...initialState(),
+      workers: 1,
+      dryingJobs: [{ id: 102, freshKg: 500, dryMatterKg: 100, moisture: 10, quality: 90, days: 4, covered: false, rate: 1, soiled: false }],
+      automation: { ...initialState().automation, processingWorkers: 1, autoBagRacks: true },
+    };
+    s = advanceDay(withWeather(s, 'sunny'));
+    expect(s.dryingJobs).toHaveLength(0);
+    expect(s.batches.some(b => b.product === 'dried')).toBe(true);
+    expect(s.lastReport?.automation.baggedRacks).toBe(1);
+  });
 });
 
 describe('npc advice', () => {

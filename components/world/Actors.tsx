@@ -267,23 +267,39 @@ const WORKER_VARIANTS = ['male-a', 'female-b', 'male-d', 'female-f', 'male-b', '
 function Worker({ index }: { index: number }) {
   const ref = useRef<Group>(null);
   const [anim, setAnim] = useState<CharacterAnim>('walk');
-  const state = useRef({ goal: new Vector3(), wait: index * 0.8, pos: new Vector3(-2 + index, 0, -6) });
+  const isProcessing = useGameStore(s => index < (s.automation.processingWorkers ?? 0));
+  const state = useRef({
+    goal: new Vector3(),
+    wait: index * 0.8,
+    pos: new Vector3(isProcessing ? STATIONS.shed.pos[0] + index : -2 + index, 0, isProcessing ? STATIONS.shed.pos[2] + 2 : -6),
+  });
   useFrame((_, rawDt) => {
     const dt = Math.min(rawDt, 0.05), st = state.current;
     if (st.wait > 0) {
       st.wait -= dt;
       if (st.wait <= 0) {
-        const { plots } = useGameStore.getState();
-        const pool = plots.some(p => p.status !== 'empty') ? plots.filter(p => p.status !== 'empty') : plots;
-        const p = pool[Math.floor(Math.random() * pool.length)];
-        const [x, , z] = Math.random() < 0.2 ? STATIONS.shed.pos : plotPosition(p.x, p.z);
-        st.goal.set(x + (Math.random() - 0.5) * 1.4, 0, z + 0.95);
+        if (isProcessing) {
+          const rackX = [-1.6, 0, 1.6][Math.floor(Math.random() * 3)];
+          st.goal.set(STATIONS.shed.pos[0] + rackX + (Math.random() - 0.5) * 0.4, 0, STATIONS.shed.pos[2] + (Math.random() - 0.5) * 1.2);
+        } else {
+          const { plots } = useGameStore.getState();
+          const pool = plots.some(p => p.status !== 'empty') ? plots.filter(p => p.status !== 'empty') : plots;
+          const p = pool[Math.floor(Math.random() * pool.length)];
+          const [x, , z] = Math.random() < 0.1 ? STATIONS.shed.pos : plotPosition(p.x, p.z);
+          st.goal.set(x + (Math.random() - 0.5) * 1.4, 0, z + 0.95);
+        }
         setAnim('walk');
       }
     } else {
       const d = new Vector3().subVectors(st.goal, st.pos).setY(0);
-      if (d.length() < 0.15) { st.wait = 3 + Math.random() * 4; setAnim(Math.random() < 0.5 ? 'interact-right' : 'pick-up'); }
-      else { d.normalize().multiplyScalar(2.2 * dt); st.pos.add(d); if (ref.current) ref.current.rotation.y = Math.atan2(d.x, d.z); }
+      if (d.length() < 0.15) {
+        st.wait = 3 + Math.random() * 4;
+        setAnim(isProcessing ? 'interact-right' : Math.random() < 0.5 ? 'interact-right' : 'pick-up');
+      } else {
+        d.normalize().multiplyScalar(2.2 * dt);
+        st.pos.add(d);
+        if (ref.current) ref.current.rotation.y = Math.atan2(d.x, d.z);
+      }
     }
     ref.current?.position.copy(st.pos);
   });

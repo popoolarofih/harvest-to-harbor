@@ -194,7 +194,14 @@ function growPlots(s: GameState, rng: Rng, weather: Weather, lines: LogLine[]) {
   if (automation.pumpedLitres) lines.push({ text: `Automation ran the borehole: ${automation.pumpedLitres.toLocaleString()} L added for ${money(automation.pumpingCost)}.`, severity: 'info' });
   if (automation.irrigatedPlots) lines.push({ text: `Drip irrigation watered ${automation.irrigatedPlots} plot${automation.irrigatedPlots > 1 ? 's' : ''} (${automation.irrigationLitres.toLocaleString()} L).`, severity: 'info' });
   if (automation.fertilizedPlots) lines.push({ text: `Automation fertilized ${automation.fertilizedPlots} low-fertility plot${automation.fertilizedPlots > 1 ? 's' : ''} (${money(automation.fertilizerCost)}).`, severity: 'info' });
-  if (automation.coveredRacks) lines.push({ text: `Automation covered ${automation.coveredRacks} drying rack${automation.coveredRacks > 1 ? 's' : ''} before the rain.`, severity: 'good' });
+  if (automation.plantedPlots) lines.push({ text: `Field labour prepared and planted ${automation.plantedPlots} plot${automation.plantedPlots > 1 ? 's' : ''} (${money(automation.plantedCost ?? 0)}).`, severity: 'info' });
+  if (automation.treatedPlots) lines.push({ text: `Field labour treated ${automation.treatedPlots} crop problem${automation.treatedPlots > 1 ? 's' : ''} (${money(automation.treatmentCost ?? 0)}).`, severity: 'good' });
+  if (automation.wateredPlots) lines.push({ text: `Field labour watered ${automation.wateredPlots} dry plot${automation.wateredPlots > 1 ? 's' : ''}.`, severity: 'info' });
+  if (automation.gapFilledPlots) lines.push({ text: `Field labour gap-filled ${automation.gapFilledPlots} patchy young plot${automation.gapFilledPlots > 1 ? 's' : ''}.`, severity: 'info' });
+  if (automation.harvestedPlots) lines.push({ text: `Field labour harvested ${automation.harvestedPlots} mature plot${automation.harvestedPlots > 1 ? 's' : ''} (${Math.round(automation.harvestedKg ?? 0)} kg fresh).`, severity: 'good' });
+  if (automation.coveredRacks) lines.push({ text: `Processing crew covered ${automation.coveredRacks} drying rack${automation.coveredRacks > 1 ? 's' : ''} before the rain.`, severity: 'good' });
+  if (automation.openedRacks) lines.push({ text: `Processing crew opened ${automation.openedRacks} drying rack${automation.openedRacks > 1 ? 's' : ''} to dry in the sun.`, severity: 'good' });
+  if (automation.baggedRacks) lines.push({ text: `Processing crew bagged ${automation.baggedRacks} safe dried rack${automation.baggedRacks > 1 ? 's' : ''}.`, severity: 'good' });
   if (automation.irrigationNeedsRepair) lines.push({ text: 'Drip lines are clogged and need repair before automatic watering can continue.', severity: 'warning' });
   if (stormHit) lines.push({ text: `Storm winds battered ${stormHit} plot${stormHit > 1 ? 's' : ''}, tearing leaves and costing health.`, severity: 'danger' });
   if (waterlogged.length) lines.push({ text: `Waterlogged: ${list(waterlogged)}. Ridged beds drain faster; rot risk is up.`, severity: 'warning' });
@@ -261,6 +268,13 @@ function payBills(s: GameState, insuredLoss: number, lines: LogLine[]) {
     const quit = workers - afford;
     workers = afford; wages = afford * WAGE_PER_DAY; reputation = Math.max(0, reputation - 2);
     lines.push({ text: `Not enough cash for payroll: ${quit} worker${quit > 1 ? 's' : ''} quit. Profit on paper is not cash in hand.`, severity: 'danger' });
+    let fieldWorkers = s.automation.fieldWorkers ?? 0;
+    let processingWorkers = s.automation.processingWorkers ?? 0;
+    while (fieldWorkers + processingWorkers > afford && fieldWorkers + processingWorkers > 0) {
+      if (processingWorkers > 0) processingWorkers--;
+      else if (fieldWorkers > 0) fieldWorkers--;
+    }
+    s = { ...s, automation: { ...s.automation, fieldWorkers, processingWorkers } };
   }
   cash -= wages; finance.wages += wages; finance.expenses += wages;
 

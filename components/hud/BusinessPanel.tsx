@@ -1,8 +1,8 @@
 'use client';
 import {
-  BANK_LOANS, EQUIPMENT_FINANCE, HIRE_COST, INSURANCE_PREMIUM, IRRIGATION_REPAIR_COST, UPGRADES, WAGE_PER_DAY, WORKER_ENERGY, availableWorkers, cashForecast,
-  creditLimit, dailyFixedCosts, loanBlocked, lockedReason, maintenanceCost, maxWorkers, money, ownsUpgrade, tankCapacity, totalDebt,
-  upgradeBlocked, warehouseCapacity, type CashPoint, type UpgradeId,
+  BANK_LOANS, EQUIPMENT_FINANCE, HIRE_COST, INSURANCE_PREMIUM, IRRIGATION_REPAIR_COST, PLOTS_PER_FIELD_WORKER, UPGRADES, WAGE_PER_DAY, WORKER_ENERGY, availableWorkers, cashForecast,
+  creditLimit, dailyFixedCosts, isUnlocked, loanBlocked, lockedReason, maintenanceCost, maxWorkers, money, ownsUpgrade, tankCapacity, totalDebt,
+  upgradeBlocked, warehouseCapacity, type CashPoint, type PrepMethod, type SeedTier, type UpgradeId,
 } from '../../game/simulation';
 import { useGameStore } from '../../stores/gameStore';
 
@@ -85,11 +85,168 @@ export default function BusinessPanel() {
       </div>
     ))}
 
-    <h4>Labour</h4>
+    <h4>Labour & Crew</h4>
     <div className="upgrade">
-      <div><b>Workers: {s.workers}/{maxWorkers(s.level)}{availableWorkers(s) < s.workers ? ` (${availableWorkers(s)} available)` : ''}</b><small>Each adds +{WORKER_ENERGY} energy a day for {money(WAGE_PER_DAY)}/day. Hiring fee {money(HIRE_COST)}. You can manage more as you level up.</small></div>
-      <div className="btns"><button onClick={s.dismiss} disabled={!s.workers}>Let go</button><button onClick={s.hire} disabled={s.cash < HIRE_COST || s.workers >= maxWorkers(s.level)}>Hire</button></div>
+      <div>
+        <b>Hired staff: {s.workers}/{maxWorkers(s.level)}{availableWorkers(s) < s.workers ? ` (${availableWorkers(s)} available)` : ''}</b>
+        <small>Each worker costs {money(WAGE_PER_DAY)}/day in wages. Hiring fee {money(HIRE_COST)}. Staff capacity grows as your level rises.</small>
+      </div>
+      <div className="btns">
+        <button onClick={s.dismiss} disabled={!s.workers}>Let go</button>
+        <button onClick={s.hire} disabled={s.cash < HIRE_COST || s.workers >= maxWorkers(s.level)}>Hire</button>
+      </div>
     </div>
+
+    {s.workers > 0 ? (
+      <div className="crew-management">
+        <div className="crew-card">
+          <div className="crew-header">
+            <div>
+              <b>🌾 Field Labour: {s.automation.fieldWorkers ?? 0}</b>
+              <small>Automatically prepares soil, plants seeds, waters dry beds, and treats disease.</small>
+            </div>
+            <div className="stepper">
+              <button
+                onClick={() => s.configureAutomation({ fieldWorkers: Math.max(0, (s.automation.fieldWorkers ?? 0) - 1) })}
+                disabled={(s.automation.fieldWorkers ?? 0) <= 0}
+                title="Decrease field workers"
+              >
+                −
+              </button>
+              <span>{s.automation.fieldWorkers ?? 0}</span>
+              <button
+                onClick={() => s.configureAutomation({ fieldWorkers: (s.automation.fieldWorkers ?? 0) + 1 })}
+                disabled={(s.automation.fieldWorkers ?? 0) + (s.automation.processingWorkers ?? 0) >= s.workers}
+                title="Increase field workers"
+              >
+                +
+              </button>
+            </div>
+          </div>
+          {(s.automation.fieldWorkers ?? 0) > 0 && (
+            <div className="crew-controls">
+              <label className="check">
+                <input
+                  type="checkbox"
+                  checked={s.automation.autoPlant}
+                  onChange={e => s.configureAutomation({ autoPlant: e.target.checked })}
+                />
+                Auto-plant empty beds (up to {(s.automation.fieldWorkers ?? 0) * PLOTS_PER_FIELD_WORKER} beds/day)
+              </label>
+              {s.automation.autoPlant && (
+                <div className="crew-subgroup">
+                  <label>
+                    <span>Soil prep</span>
+                    <select
+                      value={s.automation.prepMethod}
+                      onChange={e => s.configureAutomation({ prepMethod: e.target.value as PrepMethod })}
+                    >
+                      <option value="ridge">Raised ridges (₦15k · rot defense)</option>
+                      <option value="clear">Clear & till (₦8k · cheaper)</option>
+                    </select>
+                  </label>
+                  <label>
+                    <span>Seed variety</span>
+                    <select
+                      value={s.automation.plantSeed}
+                      onChange={e => s.configureAutomation({ plantSeed: e.target.value as SeedTier })}
+                    >
+                      <option value="improved">Improved variety (₦11k · recommended)</option>
+                      <option value="local">Farm-saved setts (₦5k · low yield)</option>
+                      {isUnlocked(s, 'certifiedSeed') && (
+                        <option value="certified">Certified disease-free (₦19k · top yield)</option>
+                      )}
+                    </select>
+                  </label>
+                </div>
+              )}
+              <label className="check">
+                <input
+                  type="checkbox"
+                  checked={s.automation.autoMaintain}
+                  onChange={e => s.configureAutomation({ autoMaintain: e.target.checked })}
+                />
+                Auto-maintain crops (water dry soil, fertilize, treat pests & rot, gap-fill)
+              </label>
+              <label className="check">
+                <input
+                  type="checkbox"
+                  checked={s.automation.autoHarvest}
+                  onChange={e => s.configureAutomation({ autoHarvest: e.target.checked })}
+                />
+                Auto-harvest mature crops into fresh store
+              </label>
+            </div>
+          )}
+        </div>
+
+        <div className="crew-card">
+          <div className="crew-header">
+            <div>
+              <b>🏭 Processing Workers: {s.automation.processingWorkers ?? 0}</b>
+              <small>Stationed at drying racks: covers them during rain and opens them in the sun so slices dry.</small>
+            </div>
+            <div className="stepper">
+              <button
+                onClick={() => s.configureAutomation({ processingWorkers: Math.max(0, (s.automation.processingWorkers ?? 0) - 1) })}
+                disabled={(s.automation.processingWorkers ?? 0) <= 0}
+                title="Decrease processing workers"
+              >
+                −
+              </button>
+              <span>{s.automation.processingWorkers ?? 0}</span>
+              <button
+                onClick={() => s.configureAutomation({ processingWorkers: (s.automation.processingWorkers ?? 0) + 1 })}
+                disabled={(s.automation.fieldWorkers ?? 0) + (s.automation.processingWorkers ?? 0) >= s.workers}
+                title="Increase processing workers"
+              >
+                +
+              </button>
+            </div>
+          </div>
+          {(s.automation.processingWorkers ?? 0) > 0 && (
+            <div className="crew-controls">
+              <label className="check">
+                <input
+                  type="checkbox"
+                  checked={s.automation.autoCoverRacks}
+                  onChange={e => s.configureAutomation({ autoCoverRacks: e.target.checked })}
+                />
+                Cover drying racks when rain or storm hits
+              </label>
+              <label className="check">
+                <input
+                  type="checkbox"
+                  checked={s.automation.autoOpenRacks}
+                  onChange={e => s.configureAutomation({ autoOpenRacks: e.target.checked })}
+                />
+                Open (uncover) drying racks in sunny weather to resume drying
+              </label>
+              <label className="check">
+                <input
+                  type="checkbox"
+                  checked={s.automation.autoBagRacks}
+                  onChange={e => s.configureAutomation({ autoBagRacks: e.target.checked })}
+                />
+                QC & bag into warehouse storage once dried to ≤12% moisture
+              </label>
+            </div>
+          )}
+        </div>
+
+        {s.workers - (s.automation.fieldWorkers ?? 0) - (s.automation.processingWorkers ?? 0) > 0 && (
+          <small className="muted unassigned-note">
+            ⚡ {s.workers - (s.automation.fieldWorkers ?? 0) - (s.automation.processingWorkers ?? 0)} unassigned worker(s) add +{(s.workers - (s.automation.fieldWorkers ?? 0) - (s.automation.processingWorkers ?? 0)) * WORKER_ENERGY} energy daily to the farmer.
+          </small>
+        )}
+      </div>
+    ) : (
+      <div className="hint-card">
+        <small className="muted">
+          💡 Hire workers above to assign them to <b>Field Labour</b> (automatic planting and crop care) and <b>Processing Workers</b> (covering drying racks in rain and opening them in the sun).
+        </small>
+      </div>
+    )}
 
     <h4>Risk management</h4>
     <div className="upgrade">

@@ -141,6 +141,11 @@ export default function StoragePanel() {
     {fresh.map(b => <FreshBatch key={b.id} b={b} />)}
 
     <h4>Drying racks <small className="muted">({Math.round(rackLoadKg(s)).toLocaleString()} / {rackCapacity(s).toLocaleString()} kg{s.upgrades.solarDryer ? ', solar tunnel' : ', open air'})</small></h4>
+    {(s.automation.processingWorkers ?? 0) > 0 && (
+      <div className="worker-banner">
+        👷 <b>Processing workers on duty</b> · racks automatically covered in rain and opened in the sun to dry.
+      </div>
+    )}
     {!s.dryingJobs.length && <p className="muted">Racks are empty.</p>}
     {s.dryingJobs.map(j => {
       const kg = dryKgOf(j), safe = j.moisture <= SAFE_MOISTURE;

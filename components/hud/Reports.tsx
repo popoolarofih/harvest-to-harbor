@@ -27,7 +27,7 @@ export function MorningReport() {
   const r = s.lastReport;
   if (!r || s.reportSeenDay >= r.day || s.lastInspection) return null;
   const a = r.automation;
-  const automated = a.irrigatedPlots || a.pumpedLitres || a.fertilizedPlots || a.coveredRacks || a.irrigationNeedsRepair;
+  const automated = a.irrigatedPlots || a.pumpedLitres || a.fertilizedPlots || a.coveredRacks || a.irrigationNeedsRepair || (a.plantedPlots ?? 0) > 0 || (a.wateredPlots ?? 0) > 0 || (a.treatedPlots ?? 0) > 0 || (a.gapFilledPlots ?? 0) > 0 || (a.harvestedPlots ?? 0) > 0 || (a.openedRacks ?? 0) > 0 || (a.baggedRacks ?? 0) > 0;
   return (
     <div className="report card">
       <div className="eyebrow">Morning report · day {r.day}</div>
@@ -36,8 +36,15 @@ export function MorningReport() {
         <b>Operations</b>
         {a.pumpedLitres > 0 && <span>Pumped {a.pumpedLitres.toLocaleString()} L ({money(a.pumpingCost)})</span>}
         {a.irrigatedPlots > 0 && <span>Watered {a.irrigatedPlots} bed{a.irrigatedPlots > 1 ? 's' : ''} ({a.irrigationLitres.toLocaleString()} L)</span>}
+        {(a.plantedPlots ?? 0) > 0 && <span>Planted {a.plantedPlots} bed{a.plantedPlots! > 1 ? 's' : ''} ({money(a.plantedCost ?? 0)})</span>}
+        {(a.treatedPlots ?? 0) > 0 && <span>Treated {a.treatedPlots} issue{a.treatedPlots! > 1 ? 's' : ''} ({money(a.treatmentCost ?? 0)})</span>}
+        {(a.wateredPlots ?? 0) > 0 && <span>Watered {a.wateredPlots} bed{a.wateredPlots! > 1 ? 's' : ''}</span>}
         {a.fertilizedPlots > 0 && <span>Fertilized {a.fertilizedPlots} bed{a.fertilizedPlots > 1 ? 's' : ''} ({money(a.fertilizerCost)})</span>}
-        {a.coveredRacks > 0 && <span>Covered {a.coveredRacks} drying rack{a.coveredRacks > 1 ? 's' : ''}</span>}
+        {(a.gapFilledPlots ?? 0) > 0 && <span>Gap-filled {a.gapFilledPlots} bed{a.gapFilledPlots! > 1 ? 's' : ''}</span>}
+        {(a.harvestedPlots ?? 0) > 0 && <span>Harvested {a.harvestedPlots} bed{a.harvestedPlots! > 1 ? 's' : ''}</span>}
+        {a.coveredRacks > 0 && <span>Covered {a.coveredRacks} rack{a.coveredRacks > 1 ? 's' : ''}</span>}
+        {(a.openedRacks ?? 0) > 0 && <span>Opened {a.openedRacks} rack{a.openedRacks! > 1 ? 's' : ''}</span>}
+        {(a.baggedRacks ?? 0) > 0 && <span>Bagged {a.baggedRacks} rack{a.baggedRacks! > 1 ? 's' : ''}</span>}
         {a.irrigationNeedsRepair && <span className="warn">Drip lines need service</span>}
       </div>}
       <ul>{r.lines.slice(1).map((l, i) => <li key={i} className={l.severity}>{l.text}</li>)}</ul>

@@ -49,6 +49,7 @@ export const WAGE_PER_DAY = 3_000;
 export const HIRE_COST = 5_000;
 export const INSURANCE_PREMIUM = 2_500;
 export const INSURANCE_COVER = 0.7;
+export const PLOTS_PER_FIELD_WORKER = 8;
 
 /** Base labour to wash, cut and spread fresh ginger, per fresh kg. Prep choices add to it. */
 export const DRYING_COST_PER_KG = 100;

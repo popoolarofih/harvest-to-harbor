@@ -82,11 +82,39 @@ export interface AutomationSettings {
   autoFertilize: boolean;
   fertilizerDailyLimit: number;
   autoCoverRacks: boolean;
+  fieldWorkers: number;
+  autoPlant: boolean;
+  prepMethod: PrepMethod;
+  plantSeed: SeedTier;
+  autoMaintain: boolean;
+  autoWater: boolean;
+  autoTreat: boolean;
+  autoGapFill: boolean;
+  autoHarvest: boolean;
+  processingWorkers: number;
+  autoOpenRacks: boolean;
+  autoBagRacks: boolean;
 }
 
 export interface AutomationSummary {
-  irrigatedPlots: number; irrigationLitres: number; pumpedLitres: number; pumpingCost: number;
-  fertilizedPlots: number; fertilizerCost: number; coveredRacks: number; irrigationNeedsRepair: boolean;
+  irrigatedPlots: number;
+  irrigationLitres: number;
+  pumpedLitres: number;
+  pumpingCost: number;
+  fertilizedPlots: number;
+  fertilizerCost: number;
+  coveredRacks: number;
+  irrigationNeedsRepair: boolean;
+  plantedPlots?: number;
+  plantedCost?: number;
+  wateredPlots?: number;
+  treatedPlots?: number;
+  treatmentCost?: number;
+  gapFilledPlots?: number;
+  harvestedPlots?: number;
+  harvestedKg?: number;
+  openedRacks?: number;
+  baggedRacks?: number;
 }
 
 export interface InspectionReport {

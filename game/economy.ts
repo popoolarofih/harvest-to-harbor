@@ -149,12 +149,23 @@ export function hireWorker(s: GameState): GameState {
   if (s.workers >= maxWorkers(s.level)) return fail(s, `You can manage ${maxWorkers(s.level)} workers at Level ${s.level}. Grow the business to take on more.`);
   const why = blocked(s, { cash: HIRE_COST });
   if (why) return fail(s, why);
-  return { ...spend(s, HIRE_COST), workers: s.workers + 1, toast: `Worker hired: +${WORKER_ENERGY} energy from tomorrow. Wages are paid every evening.` };
+  let fieldWorkers = s.automation.fieldWorkers ?? 0;
+  let processingWorkers = s.automation.processingWorkers ?? 0;
+  if (fieldWorkers === 0 && processingWorkers === 0) fieldWorkers = 1;
+  else if (processingWorkers === 0 && s.workers === 1) processingWorkers = 1;
+  return { ...spend(s, HIRE_COST), workers: s.workers + 1, automation: { ...s.automation, fieldWorkers, processingWorkers }, toast: `Worker hired: +${WORKER_ENERGY} energy from tomorrow. Wages are paid every evening.` };
 }
 
 export function dismissWorker(s: GameState): GameState {
   if (!s.workers) return s;
-  return { ...s, workers: s.workers - 1, reputation: Math.max(0, s.reputation - 1), toast: 'Worker let go. Lower wages, less labour.' };
+  const newCount = s.workers - 1;
+  let fieldWorkers = s.automation.fieldWorkers ?? 0;
+  let processingWorkers = s.automation.processingWorkers ?? 0;
+  while (fieldWorkers + processingWorkers > newCount && fieldWorkers + processingWorkers > 0) {
+    if (processingWorkers > 0) processingWorkers--;
+    else if (fieldWorkers > 0) fieldWorkers--;
+  }
+  return { ...s, workers: newCount, automation: { ...s.automation, fieldWorkers, processingWorkers }, reputation: Math.max(0, s.reputation - 1), toast: 'Worker let go. Lower wages, less labour.' };
 }
 
 /** Which level unlock (if any) gates each upgrade. */
