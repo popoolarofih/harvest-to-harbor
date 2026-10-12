@@ -7,6 +7,8 @@ import {
 } from '../../game/simulation';
 import type { Batch, CutStyle, Packaging, PrepChoices, SortLevel, WashMethod } from '../../game/types';
 import { useGameStore } from '../../stores/gameStore';
+import { Tip } from './Menus';
+import { GRADE_TIP } from './PlotPanel';
 
 const STAGES = ['Wash', 'Sort', 'Slice', 'Dry', 'Grind', 'QC', 'Pack'] as const;
 
@@ -24,7 +26,7 @@ function Pipeline({ current, skipGrind }: { current: (typeof STAGES)[number]; sk
 
 const gradeChip = (b: Pick<Batch, 'product' | 'quality' | 'moisture' | 'packaging' | 'soiled'>) => {
   const g = gradeForBatch(b);
-  return <span className={`grade g${g}`}>{gradeLabel(g)}</span>;
+  return <span className="grade-wrap"><span className={`grade g${g}`}>{gradeLabel(g)}</span><Tip text={GRADE_TIP} align="right" /></span>;
 };
 
 function BuyerButtons({ batch }: { batch: Batch }) {
@@ -134,7 +136,7 @@ export default function StoragePanel() {
     <div className="modal-row"><span>Warehouse</span><b className={used > cap ? 'warn' : ''}>{Math.round(used).toLocaleString()} / {cap.toLocaleString()} kg</b></div>
     <div className="modal-row"><span>Facilities</span><b>Open racks{s.upgrades.solarDryer ? ' · Solar tunnel dryer' : ''}{s.upgrades.mill ? ' · Hammer mill' : ''}</b></div>
 
-    <h4>Fresh ginger</h4>
+    <h4>Fresh ginger <Tip text="Fresh ginger loses quality every day in storage. Sell it now, or process it: drying takes days and costs money, but dried ginger keeps and sells for far more per kilo." align="left" /></h4>
     {!fresh.length && <p className="muted">Nothing harvested yet.</p>}
     {fresh.map(b => <FreshBatch key={b.id} b={b} />)}
 
@@ -146,7 +148,7 @@ export default function StoragePanel() {
         <div key={j.id} className="batch">
           <Pipeline current={safe ? 'QC' : 'Dry'} skipGrind />
           <div className="batch-head"><b>Rack #{j.id} · {Math.round(j.freshKg).toLocaleString()} kg sliced</b><span>{j.days} days{j.covered ? ' · covered' : ''}</span></div>
-          <div className="bar-label"><span>Moisture (target ≤ {SAFE_MOISTURE}%)</span><b className={safe ? '' : 'warn'}>{j.moisture.toFixed(1)}%</b></div>
+          <div className="bar-label"><span>Moisture (target ≤ {SAFE_MOISTURE}%) <Tip text={`Buyers reject dried ginger above ${SAFE_MOISTURE}% moisture, and damp bags go mouldy. Cover the racks when rain is forecast and bag only at ${SAFE_MOISTURE}% or below.`} align="left" /></span><b className={safe ? '' : 'warn'}>{j.moisture.toFixed(1)}%</b></div>
           <div className="progress"><i style={{ width: `${Math.max(0, Math.min(100, ((80 - j.moisture) / (80 - SAFE_MOISTURE)) * 100))}%` }} /></div>
           <small className="muted">Quality {Math.round(j.quality)}/100{j.soiled ? ' · soil left from rinsing' : ''} · ≈{Math.round(kg)} kg if bagged now · tomorrow looks {WEATHER_INFO[s.forecast[0].weather].label.toLowerCase()}.</small>
           {!s.upgrades.solarDryer && <button className="action wide" onClick={() => s.cover(j.id)}><strong>{j.covered ? 'Uncover racks' : '⛺ Cover with tarpaulin'}</strong><small>{j.covered ? 'Resume drying' : 'Protect from rain; pauses drying'}</small></button>}

@@ -6,6 +6,7 @@ import { Object3D, Vector3, type Group, type InstancedMesh } from 'three';
 import { plotName } from '../../game/simulation';
 import type { Plot as PlotState, Weather } from '../../game/types';
 import { useGameStore, type Fx } from '../../stores/gameStore';
+import { reducedMotion } from '../../stores/session';
 import { plotPosition } from './layout';
 import { Model } from './models';
 import { walkTo } from './playerState';
@@ -28,7 +29,7 @@ function Crops({ p }: { p: PlotState }) {
   const phase = p.id * 1.37;
   useFrame(({ clock }) => {
     if (!group.current) return;
-    const t = clock.elapsedTime, amp = SWAY[weather];
+    const t = clock.elapsedTime, amp = reducedMotion() ? 0 : SWAY[weather];
     group.current.children.forEach((c, i) => {
       c.rotation.z = Math.sin(t * (1.6 + amp * 4) + phase + i * 0.7) * amp;
       c.rotation.x = Math.cos(t * 1.3 + phase + i) * amp * 0.5;

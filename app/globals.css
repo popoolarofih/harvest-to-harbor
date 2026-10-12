@@ -142,3 +142,110 @@ html,body{overscroll-behavior:none}
 .modal{max-height:92dvh}
 .report{top:58px;max-height:calc(100dvh - 70px);overflow:auto}
 }
+
+/* Title screen, onboarding, tutorial, menus & saving */
+.canvas-wrap{z-index:0}
+.screen{position:absolute;inset:0;z-index:10;display:grid;place-items:center;overflow:auto;padding:max(16px,env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) max(16px,env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left));background:radial-gradient(ellipse at 50% 40%,#0b100c55 0,#0b100cd9 75%)}
+.title-card,.intro-card{width:min(460px,100%);background:#0e1510e6;border:1px solid #ffffff1c;border-radius:24px;padding:28px;box-shadow:0 30px 90px #0009;backdrop-filter:blur(14px)}
+.title-mark small{display:block;color:var(--green);font-size:12px;letter-spacing:.32em;font-weight:700}
+.title-mark h1{font-family:'Space Grotesk';font-size:52px;line-height:1;margin:4px 0 0;letter-spacing:.02em;background:linear-gradient(92deg,#f3f1e7 30%,#e9c46a);-webkit-background-clip:text;background-clip:text;color:transparent}
+.title-intro{color:#d4dcd2;font-size:15px;line-height:1.55;margin:14px 0 20px}
+.title-actions{display:grid;gap:9px}
+.title-actions .action{width:100%;text-align:center;padding:12px}
+.title-actions .action strong{font-size:14px}
+.action.big{padding:15px}
+.action.big strong{font-size:17px;font-family:'Space Grotesk'}
+.action.big small{font-size:12px}
+.title-row{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.title-foot{display:block;text-align:center;color:var(--muted);font-size:11px;margin-top:14px}
+.screen[aria-busy=true] .title-actions{visibility:hidden}
+.recovery{display:flex;flex-direction:column;gap:5px;margin:0 0 14px;font-size:12.5px;line-height:1.45;align-items:flex-start}
+.recovery .link{padding:0}
+.action.danger{background:#3a1d18;border-color:#8a4a3a}
+.action.danger:hover{background:#4a241d;border-color:#b0614c}
+
+.intro-card{width:min(520px,100%);border-color:#ffd25a44;animation:cardIn .35s ease-out}
+.intro-card h2{font-family:'Space Grotesk';font-size:26px;margin:6px 0 0}
+.avatar.npc-amaka{background:#7a3d5c}
+.avatar.npc-chinedu{background:#2f5a73}
+.dots{display:flex;gap:6px;justify-content:center;margin:4px 0 16px}
+.dots i{width:7px;height:7px;border-radius:50%;background:#ffffff26}
+.dots i.on{background:#ffd25a}
+.intro-actions{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.intro-actions span{display:flex;gap:8px}
+.intro-actions .action{min-width:84px;text-align:center}
+.intro-choice{display:grid;gap:9px}
+@keyframes cardIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+
+.mission.tutorial{padding:10px;border-radius:12px;background:#231f12;border:1px solid #ffd25a88;margin-bottom:8px}
+.mission.tutorial b{display:block;font-family:'Space Grotesk';font-size:15px;margin:2px 0}
+.mission.tutorial p{margin:2px 0 6px;font-size:12px;line-height:1.45;color:#ece5cf}
+.tut-progress{display:flex;gap:3px;margin:6px 0}
+.tut-progress i{flex:1;height:4px;border-radius:2px;background:#ffffff1f}
+.tut-progress i.done{background:#b4e16e}
+.tut-progress i.on{background:#ffd25a}
+.tut-actions{display:flex;justify-content:space-between;font-size:11px}
+.tut-actions .link{padding:0;color:#d9c98f}
+.side.compact .mission.tutorial{display:block}
+.side.compact .mission.tutorial p,.side.compact .tut-progress{display:none}
+
+/* The control the current tutorial step is about. */
+@keyframes tutPulse{0%,100%{box-shadow:0 0 0 2px #ffd25a,0 0 0 0 #ffd25a66}50%{box-shadow:0 0 0 2px #ffd25a,0 0 0 8px #ffd25a00}}
+.tut-end-day [data-tut=end-day],.tut-storage-tab [data-tut=storage-tab],.tut-prompt [data-tut=prompt],.tut-plot-panel .plot-panel{box-shadow:0 0 0 2px #ffd25a;animation:tutPulse 1.6s ease-in-out infinite}
+
+.interact-prompt.world{position:static;transform:none;white-space:nowrap}
+
+.topbar{gap:12px}
+.top-right{display:flex;align-items:center;gap:8px;flex:none}
+.menu-btn{width:38px;height:38px;border-radius:11px;border:1px solid #ffffff1c;background:#101710dc;color:var(--text);font-size:18px;cursor:pointer}
+.menu-btn:hover{background:#1c271d}
+.save-ind{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);white-space:nowrap}
+.save-ind i{width:7px;height:7px;border-radius:50%;background:#5d8f48}
+.save-ind.pending i{background:#e9c46a;animation:tutPulse 1s infinite}
+.save-ind.error{color:#f4c2b4}
+.save-ind.error i{background:var(--red)}
+.save-banner{position:absolute;left:50%;top:calc(80px + env(safe-area-inset-top));transform:translateX(-50%);width:min(520px,calc(100vw - 24px));padding:10px 14px;border-radius:12px;background:#3a1d18f2;border:1px solid #b0614c;color:#ffe2d8;font-size:12.5px;pointer-events:auto;z-index:2}
+.modal.game-menu .save-ind{margin:-8px 0 14px}
+.menu-list{display:grid;gap:8px}
+.menu-list .action,.journal-actions .action{text-align:center}
+.journal-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:18px}
+.modal.game-menu,.modal.confirm,.modal.settings{width:min(440px,calc(100vw - 32px))}
+.modal.howto{width:min(760px,calc(100vw - 32px))}
+.howto-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px 22px}
+.howto-grid h4{margin:10px 0 4px}
+.howto-grid p{font-size:13px;line-height:1.5;color:#cfd8cd;margin:4px 0}
+.confirm-body{font-size:14px;line-height:1.5;color:#d4dcd2}
+.confirm-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:8px}
+.confirm-actions .action{min-width:110px;text-align:center}
+.modal.settings .seg{margin-bottom:6px}
+.modal.settings .action.danger{width:100%;margin-top:6px}
+.small{font-size:12.5px;line-height:1.5}
+
+.tip{position:relative;display:inline-block;vertical-align:middle;line-height:1}
+.tip-btn{width:15px;height:15px;padding:0;border-radius:50%;border:1px solid #ffffff38;background:transparent;color:var(--muted);font-size:9.5px;font-weight:700;line-height:13px;cursor:help;text-transform:none;letter-spacing:0}
+.tip-btn:hover,.tip-btn:focus-visible{color:#142014;background:var(--green);border-color:var(--green);outline:none}
+.tip .tip-pop{display:block;position:absolute;top:calc(100% + 6px);left:50%;transform:translateX(-50%);z-index:30;width:230px;padding:9px 11px;border-radius:10px;background:#1d281f;border:1px solid #ffffff26;box-shadow:0 12px 30px #0008;color:var(--text);font:500 12px/1.45 'DM Sans',sans-serif;text-transform:none;letter-spacing:0;text-align:left;white-space:normal;pointer-events:none}
+.tip.left .tip-pop{left:-6px;transform:none}
+.tip.right .tip-pop{left:auto;right:-6px;transform:none}
+.stat .tip{display:inline-block;margin-left:3px}
+.stat .wx-label{display:inline;color:inherit;font-size:inherit;text-transform:none;letter-spacing:0}
+.grade-wrap{display:inline-flex;align-items:center;gap:5px}
+
+@media(max-width:850px){
+.journal-actions,.howto-grid{grid-template-columns:1fr}
+}
+@media(max-width:560px){
+.brand{display:none}
+.topbar{gap:6px}
+.save-ind{font-size:0;gap:0}
+.wx-label{display:none}
+.title-card,.intro-card{padding:20px;border-radius:20px}
+.title-mark h1{font-size:40px}
+.title-intro{font-size:14px}
+.side.with-tutorial .mission.campaign{display:none}
+.mission.tutorial p{font-size:11.5px}
+.menu-btn{width:34px;height:34px}
+}
+
+/* Reduced motion: device preference by default, or the in-game setting. */
+[data-motion=reduce] *,[data-motion=reduce] *::before,[data-motion=reduce] *::after{animation:none!important;transition:none!important}

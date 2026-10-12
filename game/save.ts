@@ -1,0 +1,144 @@
+// Versioned save format. Plain TypeScript (no browser APIs) so it can be unit-tested in node;
+// the browser storage adapter lives in stores/persistence.ts.
+import { CAMPAIGN } from './missions';
+import { initialState } from './state';
+import { TUTORIAL_STATUSES, type TutorialProgress } from './tutorial';
+import type { GameState } from './types';
+
+export const SAVE_VERSION = 1;
+export const SAVE_KEY = 'h2h.save';
+/** Where an unreadable save is copied before anything else may overwrite the main slot. */
+export const UNREADABLE_KEY = 'h2h.save.unreadable';
+
+/** GameState fields that are presentation, not progress: never written, reset on load. */
+export const TRANSIENT_KEYS = ['toast', 'lastInspection'] as const;
+
+/** Store state that isn't part of the simulation but must survive a reload. */
+export interface SaveMeta {
+  /** Day of the morning report the player dismissed, so it doesn't pop up again. */
+  reportSeenDay: number;
+  tutorial: TutorialProgress;
+}
+
+export interface SaveFile { version: number; savedAt: number; game: GameState; meta: SaveMeta }
+
+export type LoadResult =
+  | { kind: 'none' }
+  | { kind: 'ok'; save: SaveFile; migratedFrom: number | null }
+  | { kind: 'invalid'; reason: string; raw: string };
+
+type Json = Record<string, unknown>;
+/** Step `n` upgrades a version-n save to version n + 1. Add one whenever the saved shape changes. */
+export type Migration = (data: Json) => Json;
+export const MIGRATIONS: Record<number, Migration> = {};
+
+export function serializeSave(game: GameState, meta: SaveMeta, now = Date.now()): string {
+  const persisted: Json = { ...game };
+  for (const k of TRANSIENT_KEYS) delete persisted[k];
+  return JSON.stringify({ version: SAVE_VERSION, savedAt: now, game: persisted, meta });
+}
+
+/** The state to resume from: the saved simulation plus fresh values for presentation-only fields. */
+export function restoreGame(save: SaveFile): GameState {
+  return { ...save.game, toast: '', lastInspection: null };
+}
+
+const kindOf = (v: unknown) => (v === null ? 'null' : Array.isArray(v) ? 'array' : typeof v);
+
+/** Paths that may be null even though the fresh-game template has a value there. Array elements use `[]`. */
+const NULLABLE = new Set(['story', 'story.speaker', 'missions[].npc']);
+/** Arrays that start empty, so the template can't describe their elements: required keys instead. */
+const ELEMENT_KEYS: Record<string, string[]> = {
+  batches: ['id', 'product', 'kg', 'quality', 'moisture'],
+  dryingJobs: ['id', 'freshKg', 'dryMatterKg', 'moisture', 'quality', 'days'],
+  events: ['kind', 'daysLeft', 'magnitude'],
+  contracts: ['id', 'buyerId', 'kg', 'status', 'deadlineDay'],
+  shipments: ['id', 'contractId', 'stage', 'daysLeft'],
+  loans: ['id', 'balance', 'dueDay'],
+};
+const SKIP = new Set<string>(TRANSIENT_KEYS);
+
+/** Compares a value against the shape of a fresh game. Returns the first problem found, or null. */
+function checkShape(value: unknown, template: unknown, path: string): string | null {
+  const tk = kindOf(template), vk = kindOf(value);
+  if (value === undefined) return `missing ${path}`;
+  // Template null means "nothing yet" (e.g. no report, no seed): accept null or any concrete value.
+  if (tk === 'null') return null;
+  if (vk === 'null' && NULLABLE.has(path)) return null;
+  if (vk !== tk) return `${path} should be ${tk}, found ${vk}`;
+  if (vk === 'number' && !Number.isFinite(value)) return `${path} is not a finite number`;
+  if (vk === 'object') {
+    const v = value as Json, t = template as Json;
+    for (const key of Object.keys(t)) {
+      const p = path ? `${path}.${key}` : key;
+      if (SKIP.has(p)) continue;
+      const err = checkShape(v[key], t[key], p);
+      if (err) return err;
+    }
+  }
+  if (vk === 'array') {
+    const v = value as unknown[], t = template as unknown[];
+    const required = ELEMENT_KEYS[path];
+    for (let i = 0; i < v.length; i++) {
+      if (t.length) { const err = checkShape(v[i], t[0], `${path}[]`); if (err) return err.replace('[]', `[${i}]`); }
+      else if (required) {
+        if (kindOf(v[i]) !== 'object') return `${path}[${i}] should be object`;
+        const missing = required.find(k => (v[i] as Json)[k] === undefined);
+        if (missing) return `missing ${path}[${i}].${missing}`;
+      }
+    }
+  }
+  return null;
+}
+
+/** Structural and invariant checks on a saved game. Returns a reason it can't be loaded, or null. */
+export function validateGame(game: unknown): string | null {
+  const template = initialState();
+  const shape = checkShape(game, template, '');
+  if (shape) return shape;
+  const g = game as GameState;
+  if (!Number.isInteger(g.day) || g.day < 1) return 'day must be a whole number from 1';
+  if (g.plots.length < template.plots.length) return 'plots are missing';
+  if (g.plots.some((p, i) => p.id !== i)) return 'plot ids are out of order';
+  if (g.missions.length !== CAMPAIGN.length || g.missions.some((m, i) => m.id !== CAMPAIGN[i].id)) return 'missions do not match this campaign';
+  const ids = [...g.batches, ...g.dryingJobs, ...g.contracts, ...g.shipments, ...g.loans].map(x => x.id);
+  if (ids.some(id => id >= g.nextId)) return 'an item id is ahead of nextId';
+  return null;
+}
+
+function validateMeta(meta: unknown): string | null {
+  if (kindOf(meta) !== 'object') return 'meta should be object';
+  const m = meta as Json;
+  if (typeof m.reportSeenDay !== 'number') return 'meta.reportSeenDay should be number';
+  const t = m.tutorial as Json | undefined;
+  if (kindOf(t) !== 'object' || !TUTORIAL_STATUSES.includes(t!.status as never) || !Number.isInteger(t!.step)) return 'meta.tutorial is malformed';
+  return null;
+}
+
+/** Runs registered migrations until the data reaches `target`. Throws if a step is missing. */
+export function migrate(data: Json, from: number, migrations: Record<number, Migration> = MIGRATIONS, target = SAVE_VERSION): Json {
+  let out = data;
+  for (let v = from; v < target; v++) {
+    const step = migrations[v];
+    if (!step) throw new Error(`no migration from version ${v}`);
+    out = { ...step(out), version: v + 1 };
+  }
+  return out;
+}
+
+/** Reads raw storage text into a loadable save, or explains why it can't be loaded. Never throws. */
+export function parseSave(raw: string | null, migrations: Record<number, Migration> = MIGRATIONS, target = SAVE_VERSION): LoadResult {
+  if (raw === null || raw === '') return { kind: 'none' };
+  const invalid = (reason: string): LoadResult => ({ kind: 'invalid', reason, raw });
+  let data: unknown;
+  try { data = JSON.parse(raw); } catch { return invalid('the save file is not valid JSON'); }
+  if (kindOf(data) !== 'object') return invalid('the save file is not an object');
+  const version = (data as Json).version;
+  if (typeof version !== 'number' || !Number.isInteger(version) || version < 1) return invalid('the save has no version');
+  if (version > target) return invalid(`the save is from a newer version of the game (v${version})`);
+  let migrated: Json;
+  try { migrated = migrate(data as Json, version, migrations, target); } catch (e) { return invalid(`the save can't be upgraded: ${(e as Error).message}`); }
+  const problem = validateGame(migrated.game) ?? validateMeta(migrated.meta);
+  if (problem) return invalid(problem);
+  return { kind: 'ok', save: migrated as unknown as SaveFile, migratedFrom: version === target ? null : version };
+}

@@ -1,6 +1,8 @@
 'use client';
 import { create } from 'zustand';
+import { restoreGame, type SaveFile, type SaveMeta } from '../game/save';
 import * as sim from '../game/simulation';
+import { TUTORIAL_START, signalsBetween, skipStep, stepTutorial, type TutorialProgress } from '../game/tutorial';
 import type { GameState, Haulage, Packaging, PrepChoices, PrepMethod, SeedTier } from '../game/types';
 
 export type Panel = 'farm' | 'storage' | 'market' | 'trade' | 'business' | 'journal';
@@ -19,6 +21,8 @@ interface UiState {
   talkingTo: sim.NpcId | null;
   tankOpen: boolean;
   fx: Fx | null;
+  /** Saved with the game (see game/save.ts) so an unfinished tutorial resumes after a reload. */
+  tutorial: TutorialProgress;
 }
 
 interface Actions {
@@ -54,7 +58,13 @@ interface Actions {
   dismissReport: () => void;
   clearInspection: () => void;
   clearToast: () => void;
+  /** Replaces the whole game with a fresh season on a new random seed. */
   reset: () => void;
+  /** Resumes a saved game. */
+  loadGame: (save: SaveFile) => void;
+  skipTutorial: () => void;
+  skipTutorialStep: () => void;
+  replayTutorial: () => void;
   openPanel: (panel: Panel) => void;
   setNearby: (t: Target | null) => void;
   /** Use whatever the target is: open the plot panel, a building's panel, or talk to an NPC. */
@@ -63,6 +73,14 @@ interface Actions {
 }
 
 export type Store = GameState & UiState & Actions;
+
+/** The simulation's own fields: everything a save restores. */
+export const GAME_KEYS = Object.keys(sim.initialState()) as (keyof GameState)[];
+export const gameOf = (s: Store): GameState => Object.fromEntries(GAME_KEYS.map(k => [k, s[k]])) as unknown as GameState;
+export const metaOf = (s: Store): SaveMeta => ({ reportSeenDay: s.reportSeenDay, tutorial: s.tutorial });
+
+/** UI state for a game that is just starting or resuming: nothing open, nothing selected. */
+const freshUi = () => ({ selectedPlot: null, panel: 'farm' as Panel, nearby: null, talkingTo: null, tankOpen: false, fx: null });
 
 const sameTarget = (a: Target | null, b: Target | null) => a?.kind === b?.kind && a?.id === b?.id;
 
@@ -77,13 +95,9 @@ export const useGameStore = create<Store>((set, get) => {
   });
   return {
     ...sim.initialState(),
-    selectedPlot: null,
+    ...freshUi(),
     reportSeenDay: 1,
-    panel: 'farm',
-    nearby: null,
-    talkingTo: null,
-    tankOpen: false,
-    fx: null,
+    tutorial: TUTORIAL_START,
     select: id => set({ selectedPlot: id, talkingTo: null, tankOpen: false }),
     prepare: (id, method) => act('prepare', s => sim.preparePlot(s, id, method), id),
     plant: (id, seed) => act('plant', s => sim.plantPlot(s, id, seed), id),
@@ -116,7 +130,11 @@ export const useGameStore = create<Store>((set, get) => {
     dismissReport: () => set(s => ({ reportSeenDay: s.day })),
     clearInspection: () => set({ lastInspection: null }),
     clearToast: () => set({ toast: '' }),
-    reset: () => set({ ...sim.initialState(Date.now() >>> 0), selectedPlot: null, reportSeenDay: 1, panel: 'farm', talkingTo: null, tankOpen: false, fx: null }),
+    reset: () => set({ ...sim.initialState(Date.now() >>> 0), ...freshUi(), reportSeenDay: 1, tutorial: { ...TUTORIAL_START } }),
+    loadGame: save => set({ ...restoreGame(save), ...freshUi(), ...save.meta, toast: `Welcome back. Day ${save.game.day}.` }),
+    skipTutorial: () => set(s => (s.tutorial.status === 'active' ? { tutorial: { ...s.tutorial, status: 'skipped' } } : {})),
+    skipTutorialStep: () => set(s => ({ tutorial: skipStep(s.tutorial, s.plots) })),
+    replayTutorial: () => set(s => ({ tutorial: stepTutorial(TUTORIAL_START, [], s.plots), panel: 'farm' })),
     openPanel: panel => set({ panel }),
     // Called every frame by the player: only touch the store when the target actually changes,
     // otherwise every subscriber (the whole HUD) would re-render at 60 fps.
@@ -131,6 +149,15 @@ export const useGameStore = create<Store>((set, get) => {
     }),
     closeOverlays: () => set({ selectedPlot: null, talkingTo: null, tankOpen: false, panel: 'farm', lastInspection: null, story: null }),
   };
+});
+
+// The tutorial watches real store transitions (successful actions, day ticks, panels) and advances itself.
+useGameStore.subscribe((s, prev) => {
+  // Loading, resetting or replaying replaces the tutorial object: that jump (e.g. day 1 → day 30) isn't a player action.
+  if (s.tutorial.status !== 'active' || s.tutorial !== prev.tutorial) return;
+  const next = stepTutorial(s.tutorial, signalsBetween(prev, s), s.plots);
+  if (next === s.tutorial) return;
+  useGameStore.setState(next.status === 'done' ? { tutorial: next, toast: 'Tutorial complete. Replay it any time from the Journal.' } : { tutorial: next });
 });
 
 // Dev-only handle for debugging and scripted playtests in the browser console.

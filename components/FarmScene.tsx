@@ -4,6 +4,7 @@ import { Suspense } from 'react';
 import Actors from './world/Actors';
 import { Farmhouse, ProcessingShed, Warehouse, WaterSystem } from './world/Buildings';
 import Field from './world/Field';
+import { TutorialBeacon, WorldPrompt } from './world/Guides';
 import Nature from './world/Nature';
 import Weather from './world/Weather';
 import { walkTo } from './world/playerState';
@@ -32,6 +33,8 @@ export default function FarmScene() {
         <WaterSystem />
         <Actors />
       </Suspense>
+      <TutorialBeacon />
+      <WorldPrompt />
       <WalkPlane />
     </Canvas>
   );

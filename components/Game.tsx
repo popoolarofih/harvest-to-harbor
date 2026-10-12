@@ -1,27 +1,60 @@
 'use client';
 import dynamic from 'next/dynamic';
 import { useEffect, useState } from 'react';
-import { WEATHER_INFO, maxEnergy, money, plotName, tankCapacity, titleFor } from '../game/simulation';
+import { WEATHER_INFO, dailyFixedCosts, maxEnergy, money, plotName, tankCapacity, titleFor } from '../game/simulation';
+import { currentStep } from '../game/tutorial';
 import { useGameStore, type Panel } from '../stores/gameStore';
+import { boot, startNewSeason, useSession } from '../stores/session';
+import TitleScreen from './TitleScreen';
 import BusinessPanel from './hud/BusinessPanel';
 import { CampaignJournal, MissionCard, StoryCard } from './hud/Campaign';
 import { CareerLadder, LevelUpCard, XpBar } from './hud/Career';
 import MarketPanel from './hud/MarketPanel';
+import { ConfirmDialog, GameMenu, SaveErrorBanner, SaveIndicator, Tip } from './hud/Menus';
+import { IntroStory, TutorialCard } from './hud/Onboarding';
 import PlotPanel from './hud/PlotPanel';
 import { InspectionModal, MorningReport } from './hud/Reports';
 import StoragePanel from './hud/StoragePanel';
 import TradePanel from './hud/TradePanel';
-import { InteractPrompt, NpcCard, TankCard } from './hud/WorldCards';
+import { NpcCard, TankCard } from './hud/WorldCards';
 import { zoomBy } from './world/playerState';
 
 const FarmScene = dynamic(() => import('./FarmScene'), { ssr: false, loading: () => <div className="scene-loading">Preparing your farm...</div> });
 const TABS: [Panel, string][] = [['farm', 'Farm'], ['storage', 'Storage'], ['market', 'Market'], ['trade', 'Trade'], ['business', 'Business'], ['journal', 'Journal']];
 const EVENT_LABEL = { priceCrash: '📉 Price crash', fuelSpike: '⛽ Fuel spike', workerShortage: '👷 Worker shortage' } as const;
 
+const TIPS = {
+  cash: 'Cash on hand. Seed, fertiliser, diesel and fees come out of it, and wages and upkeep are paid every night.',
+  day: 'Days only pass when you press End day. Each night runs the weather, crop growth, wages and market prices.',
+  weather: 'Rain fills the tank and waters crops but washes fertiliser away. Storms flood flat beds in the low field. The 5-day forecast is in the side panel.',
+  energy: 'Every action uses energy. It refills when you end the day, and each worker you hire adds 30 more.',
+  tank: 'Water for irrigation and washing. Each bed takes 400 L. Rain refills it for free; the borehole pump burns diesel.',
+  level: 'Earn XP from missions, harvests and sales. Levels unlock better seed, equipment, buyers and loans.',
+};
+
+/** Phases: title (and boot, before storage is read) → intro → playing. The farm renders behind all of them. */
 export default function Game() {
+  const phase = useSession(s => s.phase);
+  // Storage is only read on the client, after hydration, so the server and first client render match.
+  useEffect(() => { boot(); }, []);
+  // Highlight the HUD control the current tutorial step is about (see `data-tut` attributes).
+  const control = useGameStore(s => (s.story ? null : currentStep(s.tutorial)?.control ?? null));
+  return (
+    <div className={`game-shell ${phase === 'playing' && control ? `tut-${control}` : ''}`}>
+      <div className="canvas-wrap"><FarmScene /></div>
+      {phase === 'playing' && <Hud />}
+      {(phase === 'boot' || phase === 'title') && <TitleScreen />}
+      {phase === 'intro' && <IntroStory />}
+    </div>
+  );
+}
+
+function Hud() {
   const s = useGameStore();
   const panel = s.panel, setPanel = s.openPanel;
   const [compact, setCompact] = useState(false);
+  const [menu, setMenu] = useState(false);
+  const [confirmNew, setConfirmNew] = useState(false);
   useEffect(() => { if (!s.toast) return; const t = setTimeout(s.clearToast, 3600); return () => clearTimeout(t); }, [s.toast, s.clearToast]);
   // After the truck pulls out of the gate, follow the shipment on the map.
   const shipAt = s.fx?.kind === 'ship' ? s.fx.at : null, openPanel = s.openPanel;
@@ -31,104 +64,119 @@ export default function Game() {
   const ready = s.plots.filter(p => p.status === 'ready');
   const freshKg = s.batches.filter(b => b.product === 'fresh').reduce((a, b) => a + b.kg, 0);
   const driedKg = s.batches.filter(b => b.product === 'dried').reduce((a, b) => a + b.kg, 0);
+  const nightly = dailyFixedCosts(s);
+  const weather = WEATHER_INFO[s.weather];
+  const tutorialOn = s.tutorial.status === 'active';
 
   return (
-    <div className="game-shell">
-      <div className="canvas-wrap"><FarmScene /></div>
-      <div className="hud">
-        <header className="topbar">
-          <div className="brand"><small>HARVEST TO HARBOR</small>NIGERIA</div>
-          <div className="stats">
-            <div className="stat"><span>Cash</span><b>{money(s.cash)}</b></div>
-            <div className="stat"><span>Day</span><b>{s.day}</b></div>
-            <div className="stat"><span>Energy</span><b>{s.energy}/{maxEnergy(s)}</b></div>
-            <div className="stat"><span>Tank</span><b>{s.water.toLocaleString()} L</b></div>
-            <div className="stat" title={titleFor(s.level)}><span>Level</span><b>{s.level}</b></div>
-          </div>
-        </header>
+    <div className="hud">
+      <header className="topbar">
+        <div className="brand"><small>HARVEST TO HARBOR</small>NIGERIA</div>
+        <div className="stats">
+          <div className="stat"><span>Cash <Tip text={TIPS.cash} /></span><b>{money(s.cash)}</b></div>
+          <div className="stat"><span>Day <Tip text={TIPS.day} /></span><b>{s.day}</b></div>
+          <div className="stat"><span>Weather <Tip text={TIPS.weather} /></span><b>{weather.icon} <span className="wx-label">{weather.label}</span></b></div>
+          <div className="stat"><span>Energy <Tip text={TIPS.energy} /></span><b>{s.energy}/{maxEnergy(s)}</b></div>
+          <div className="stat"><span>Tank <Tip text={TIPS.tank} /></span><b>{s.water.toLocaleString()} L</b></div>
+          <div className="stat" title={titleFor(s.level)}><span>Level <Tip text={TIPS.level} align="right" /></span><b>{s.level}</b></div>
+        </div>
+        <div className="top-right">
+          <SaveIndicator />
+          <button className="menu-btn" onClick={() => setMenu(true)} aria-label="Menu" title="Menu">☰</button>
+        </div>
+      </header>
+      <SaveErrorBanner />
 
-        <section className={`side ${compact ? 'compact' : ''}`}>
-          <button className="collapse" onClick={() => setCompact(!compact)} aria-label={compact ? 'Expand panel' : 'Collapse panel'}>{compact ? '▸' : '▾'}</button>
-          <div className="eyebrow">Season 01 · Ginger · Kafanchan</div>
-          <XpBar />
-          <MissionCard />
-          <div className="forecast">
-            <span className="label">Today: {WEATHER_INFO[s.weather].icon} {WEATHER_INFO[s.weather].label}</span>
-            <div className="forecast-days">
-              {s.forecast.map(f => (
-                <div key={f.day} title={`${WEATHER_INFO[f.weather].label}, ${Math.round(f.confidence * 100)}% confidence`}>
-                  <small>D{f.day}</small><b>{WEATHER_INFO[f.weather].icon}</b><em>{Math.round(f.confidence * 100)}%</em>
-                </div>
-              ))}
-            </div>
-            <small className="muted">Forecasts further out are less reliable.</small>
-          </div>
-          {s.events.length > 0 && <div className="events">{s.events.map(e => <span key={e.kind} className="chip">{EVENT_LABEL[e.kind]} · {e.daysLeft}d</span>)}</div>}
-          <div className="weather"><span>FRESH</span><b>{money(s.market.fresh)}/kg</b><span>DRIED</span><b>{money(s.market.dried)}/kg</b></div>
-        </section>
-
-        <section className="actions">
-          {s.selectedPlot !== null ? <PlotPanel /> : s.tankOpen ? <TankCard /> : s.talkingTo ? <NpcCard /> : (
-            <div className="card">
-              <div className="eyebrow">Operations</div>
-              <h3>Run the farm</h3>
-              <p className="muted small"><span className="hint-mouse">Walk with <kbd>WASD</kbd> or click the ground. Press <kbd>E</kbd> next to a plot, building or person. Scroll to zoom.</span><span className="hint-touch">Tap the ground to walk, tap a plot, building or person to use it. Pinch to zoom.</span> Every action costs energy; workers add more each day.</p>
-              <div className="action-grid">
-                <button className="action primary" onClick={s.advance}><strong>🌙 End day</strong><small>Weather, growth, wages</small></button>
-                <button className="action" onClick={s.pump} disabled={s.water >= tankCapacity(s)}><strong>⛽ Pump borehole</strong><small>Refill tank with fuel</small></button>
-                <button className="action" onClick={() => setPanel('storage')}><strong>📦 Storage</strong><small>{Math.round(freshKg)} kg fresh · {Math.round(driedKg)} kg dried</small></button>
-                <button className="action" onClick={() => setPanel('business')}><strong>🏗 Business</strong><small>Workers, insurance, upgrades</small></button>
+      <section className={`side ${compact ? 'compact' : ''} ${tutorialOn ? 'with-tutorial' : ''}`}>
+        <button className="collapse" onClick={() => setCompact(!compact)} aria-label={compact ? 'Expand panel' : 'Collapse panel'}>{compact ? '▸' : '▾'}</button>
+        <div className="eyebrow">Season 01 · Ginger · Kafanchan</div>
+        <XpBar />
+        <TutorialCard />
+        <MissionCard />
+        <div className="forecast">
+          <span className="label">Today: {weather.icon} {weather.label}</span>
+          <div className="forecast-days">
+            {s.forecast.map(f => (
+              <div key={f.day} title={`${WEATHER_INFO[f.weather].label}, ${Math.round(f.confidence * 100)}% confidence`}>
+                <small>D{f.day}</small><b>{WEATHER_INFO[f.weather].icon}</b><em>{Math.round(f.confidence * 100)}%</em>
               </div>
-              {ready.length > 0 && <div className="alert good">Ready to harvest: {ready.map(plotName).join(', ')}</div>}
-            </div>
-          )}
-        </section>
-
-        <div className="mini-stats">
-          <div><span>Planted</span><b>{crops.length}/{s.plots.length}</b></div>
-          <div><span>Fresh</span><b>{Math.round(freshKg)} kg</b></div>
-          <div><span>Drying</span><b>{s.dryingJobs.length} racks</b></div>
-          <div><span>Workers</span><b>{s.workers}</b></div>
+            ))}
+          </div>
+          <small className="muted">Forecasts further out are less reliable.</small>
         </div>
+        {s.events.length > 0 && <div className="events">{s.events.map(e => <span key={e.kind} className="chip">{EVENT_LABEL[e.kind]} · {e.daysLeft}d</span>)}</div>}
+        <div className="weather"><span>FRESH</span><b>{money(s.market.fresh)}/kg</b><span>DRIED</span><b>{money(s.market.dried)}/kg</b></div>
+      </section>
 
-        <nav className="bottom">
-          {TABS.map(([id, label]) => <button key={id} className={`tab ${panel === id ? 'active' : ''}`} onClick={() => setPanel(id)}>{label}</button>)}
-        </nav>
-
-        <div className="zoom-ctrl" role="group" aria-label="Camera zoom">
-          <button onClick={() => zoomBy(1 / 1.2)} aria-label="Zoom in" title="Zoom in (+)">+</button>
-          <button onClick={() => zoomBy(1.2)} aria-label="Zoom out" title="Zoom out (−)">−</button>
-        </div>
-
-        <InteractPrompt />
-        {s.toast && <div className="toast">{s.toast}</div>}
-        <MorningReport />
-
-        {panel !== 'farm' && (
-          <div className="modal-backdrop" onClick={() => setPanel('farm')}>
-            <div className="modal" onClick={e => e.stopPropagation()}>
-              <button className="close" onClick={() => setPanel('farm')}>Close</button>
-              {panel === 'storage' && <StoragePanel />}
-              {panel === 'market' && <MarketPanel />}
-              {panel === 'trade' && <TradePanel />}
-              {panel === 'business' && <BusinessPanel />}
-              {panel === 'journal' && <>
-                <div className="eyebrow">Farmer&apos;s journal</div>
-                <h2>Farm to Fortune</h2>
-                <CampaignJournal />
-                <h4>Career</h4>
-                <CareerLadder />
-                <h4>What the farm is teaching you</h4>
-                {s.log.map((l, i) => <div key={i} className={`log ${l.severity}`}><small>Day {l.day}</small> {l.text}</div>)}
-                <button className="link" onClick={s.reset}>Start a new season (new random seed)</button>
-              </>}
+      <section className="actions">
+        {s.selectedPlot !== null ? <PlotPanel /> : s.tankOpen ? <TankCard /> : s.talkingTo ? <NpcCard /> : (
+          <div className="card">
+            <div className="eyebrow">Operations</div>
+            <h3>Run the farm</h3>
+            <p className="muted small"><span className="hint-mouse">Walk with <kbd>WASD</kbd> or click the ground. Press <kbd>E</kbd> next to a plot, building or person. Scroll to zoom.</span><span className="hint-touch">Tap the ground to walk, tap a plot, building or person to use it. Pinch to zoom.</span> Every action costs energy; workers add more each day.</p>
+            <div className="action-grid">
+              <button className="action primary" data-tut="end-day" onClick={s.advance}><strong>🌙 End day</strong><small>{nightly > 0 ? `${money(nightly)} wages & upkeep tonight` : 'Weather, growth, wages'}</small></button>
+              <button className="action" onClick={s.pump} disabled={s.water >= tankCapacity(s)}><strong>⛽ Pump borehole</strong><small>Refill tank with fuel</small></button>
+              <button className="action" onClick={() => setPanel('storage')}><strong>📦 Storage</strong><small>{Math.round(freshKg)} kg fresh · {Math.round(driedKg)} kg dried</small></button>
+              <button className="action" onClick={() => setPanel('business')}><strong>🏗 Business</strong><small>Workers, insurance, upgrades</small></button>
             </div>
+            {ready.length > 0 && <div className="alert good">Ready to harvest: {ready.map(plotName).join(', ')}</div>}
           </div>
         )}
-        <InspectionModal />
-        <StoryCard />
-        <LevelUpCard />
+      </section>
+
+      <div className="mini-stats">
+        <div><span>Planted</span><b>{crops.length}/{s.plots.length}</b></div>
+        <div><span>Fresh</span><b>{Math.round(freshKg)} kg</b></div>
+        <div><span>Drying</span><b>{s.dryingJobs.length} racks</b></div>
+        <div><span>Workers</span><b>{s.workers}</b></div>
       </div>
+
+      <nav className="bottom">
+        {TABS.map(([id, label]) => <button key={id} className={`tab ${panel === id ? 'active' : ''}`} data-tut={id === 'storage' ? 'storage-tab' : undefined} onClick={() => setPanel(id)}>{label}</button>)}
+      </nav>
+
+      <div className="zoom-ctrl" role="group" aria-label="Camera zoom">
+        <button onClick={() => zoomBy(1 / 1.2)} aria-label="Zoom in" title="Zoom in (+)">+</button>
+        <button onClick={() => zoomBy(1.2)} aria-label="Zoom out" title="Zoom out (−)">−</button>
+      </div>
+
+      {s.toast && <div className="toast" role="status">{s.toast}</div>}
+      <MorningReport />
+
+      {panel !== 'farm' && (
+        <div className="modal-backdrop" onClick={() => setPanel('farm')}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <button className="close" onClick={() => setPanel('farm')}>Close</button>
+            {panel === 'storage' && <StoragePanel />}
+            {panel === 'market' && <MarketPanel />}
+            {panel === 'trade' && <TradePanel />}
+            {panel === 'business' && <BusinessPanel />}
+            {panel === 'journal' && <>
+              <div className="eyebrow">Farmer&apos;s journal</div>
+              <h2>Farm to Fortune</h2>
+              <CampaignJournal />
+              <h4>Career</h4>
+              <CareerLadder />
+              <h4>What the farm is teaching you</h4>
+              {s.log.map((l, i) => <div key={i} className={`log ${l.severity}`}><small>Day {l.day}</small> {l.text}</div>)}
+              <div className="journal-actions">
+                <button className="action" onClick={s.replayTutorial} disabled={tutorialOn}><strong>🎓 Replay tutorial</strong><small>{tutorialOn ? 'Tutorial in progress' : 'Walk through the basics again on this farm'}</small></button>
+                <button className="action" onClick={() => setConfirmNew(true)}><strong>🌱 Start a new season</strong><small>New random seed. Replaces this farm.</small></button>
+              </div>
+            </>}
+          </div>
+        </div>
+      )}
+      <InspectionModal />
+      <StoryCard />
+      <LevelUpCard />
+      {menu && <GameMenu onClose={() => setMenu(false)} />}
+      {confirmNew && (
+        <ConfirmDialog title="Start a new season?" confirm="Start new season" danger onCancel={() => setConfirmNew(false)} onConfirm={() => { setConfirmNew(false); startNewSeason(); }}>
+          <p>Your current farm (day {s.day}, {money(s.cash)}, level {s.level}) will be replaced. This can&apos;t be undone.</p>
+        </ConfirmDialog>
+      )}
     </div>
   );
 }

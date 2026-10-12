@@ -5,12 +5,15 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Vector3, type Group } from 'three';
 import { NPCS, currentMission, type NpcId } from '../../game/simulation';
 import { useGameStore, type StationId, type Target } from '../../stores/gameStore';
+import { isPlaying, reducedMotion } from '../../stores/session';
 import { Okada } from './Buildings';
 import { COLLIDERS, NPC_SPOTS, ROAD_X, STATIONS, TANK_POS, TRUCK_POS, WALK_BOUNDS, plotPosition, targetPosition, targetRadius } from './layout';
 import { Character, Model, type CharacterAnim, type ModelId } from './models';
 import { player, view, walkTo, zoomBy } from './playerState';
 
 const WALK_SPEED = 4.2, SPRINT_SPEED = 7, BODY_RADIUS = 0.35;
+/** What the camera circles behind the title screen: roughly the middle of the farm. */
+const TITLE_CENTER = new Vector3(2, 0, -5);
 const KEYS = { up: ['KeyW', 'ArrowUp'], down: ['KeyS', 'ArrowDown'], left: ['KeyA', 'ArrowLeft'], right: ['KeyD', 'ArrowRight'] };
 const ACTION_ANIM: Partial<Record<string, CharacterAnim>> = { harvest: 'pick-up', plant: 'pick-up', prepare: 'interact-right', water: 'interact-right', fertilize: 'interact-right', treat: 'interact-right', inspect: 'pick-up', pump: 'interact-right' };
 
@@ -56,7 +59,8 @@ export function Player() {
   useEffect(() => {
     const typing = (e: KeyboardEvent) => e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement;
     const down = (e: KeyboardEvent) => {
-      if (typing(e)) return;
+      // Menus and the story intro own the keyboard until the game is being played.
+      if (typing(e) || !isPlaying()) return;
       keys.current.add(e.code);
       const s = useGameStore.getState();
       if (e.code === 'KeyE' || e.code === 'Enter') { if (s.nearby) s.interact(s.nearby); }
@@ -68,6 +72,7 @@ export function Player() {
     const blur = () => keys.current.clear();
     const wheel = (e: WheelEvent) => {
       e.preventDefault();
+      if (!isPlaying()) return;
       const dy = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY;
       // Trackpad pinch arrives as ctrl+wheel with small deltas.
       zoomBy(Math.exp(dy * (e.ctrlKey ? 0.01 : 0.0012)));
@@ -88,7 +93,7 @@ export function Player() {
     const pMove = (e: PointerEvent) => {
       if (!touches.has(e.pointerId)) return;
       touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
-      if (touches.size !== 2) return;
+      if (touches.size !== 2 || !isPlaying()) return;
       const d = spread();
       if (pinchDist > 0 && d > 0) zoomBy(pinchDist / d);
       pinchDist = d;
@@ -114,8 +119,17 @@ export function Player() {
   }, [gl]);
 
   const camGoal = useMemo(() => new Vector3(), []), look = useMemo(() => new Vector3(), []), vel = useMemo(() => new Vector3(), []);
-  useFrame(({ size }, rawDt) => {
+  useFrame(({ size, clock }, rawDt) => {
     const dt = Math.min(rawDt, 0.05);
+    if (!isPlaying()) {
+      // Title screen: a slow orbit of the farm. Play resumes by easing back to the follow camera.
+      keys.current.clear();
+      const a = reducedMotion() ? 0.45 : 0.45 + clock.elapsedTime * 0.04;
+      camera.position.set(TITLE_CENTER.x + Math.sin(a) * 22, 17, TITLE_CENTER.z + Math.cos(a) * 22);
+      camera.lookAt(TITLE_CENTER);
+      if (ref.current) { ref.current.position.copy(player.pos); ref.current.rotation.y = player.heading; }
+      return;
+    }
     const k = keys.current, held = (codes: string[]) => codes.some(c => k.has(c));
     vel.set((held(KEYS.right) ? 1 : 0) - (held(KEYS.left) ? 1 : 0), 0, (held(KEYS.down) ? 1 : 0) - (held(KEYS.up) ? 1 : 0));
     const sprint = k.has('ShiftLeft') || k.has('ShiftRight');

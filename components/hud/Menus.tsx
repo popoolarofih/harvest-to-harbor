@@ -1,0 +1,180 @@
+'use client';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { SAFE_MOISTURE } from '../../game/simulation';
+import { useSaveStatus } from '../../stores/persistence';
+import { resetSave, setMotion, toTitle, useSession, useSettings, type MotionPref } from '../../stores/session';
+
+/** "Saved just now" / "Saved at 14:05" / "Saved 3 Oct, 14:05". */
+export function savedLabel(at: number | null, now = Date.now()) {
+  if (!at) return 'Not saved yet';
+  if (now - at < 60_000) return 'Saved just now';
+  const d = new Date(at), time = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  return d.toDateString() === new Date(now).toDateString() ? `Saved at ${time}` : `Saved ${d.toLocaleDateString([], { day: 'numeric', month: 'short' })}, ${time}`;
+}
+
+/** Re-renders a component every 30 s so relative times ("just now") stay true. */
+function useClock() {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => { const t = setInterval(() => setNow(Date.now()), 30_000); return () => clearInterval(t); }, []);
+  return now;
+}
+
+/** Subtle autosave indicator for the top bar. Subscribes only to the save status, never to the game. */
+export function SaveIndicator() {
+  const { state, savedAt } = useSaveStatus();
+  const now = useClock();
+  const text = state === 'pending' ? 'Saving…' : state === 'error' ? 'Save failed' : savedLabel(savedAt, now);
+  return <div className={`save-ind ${state}`} role="status" aria-live="polite" data-testid="save-status"><i aria-hidden />{text}</div>;
+}
+
+/** Explains a failed save until the next one succeeds. */
+export function SaveErrorBanner() {
+  const error = useSaveStatus(s => (s.state === 'error' ? s.error : null));
+  if (!error) return null;
+  return <div className="save-banner" role="alert">⚠ {error}</div>;
+}
+
+/** A small "?" that explains a mechanic. Hover or focus on desktop, tap on touch screens. */
+export function Tip({ text, align = 'center' }: { text: string; align?: 'center' | 'left' | 'right' }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <span className={`tip ${align}`} onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)}>
+      <button type="button" className="tip-btn" aria-label={text} aria-expanded={open}
+        onClick={e => { e.stopPropagation(); setOpen(o => !o); }} onBlur={() => setOpen(false)} onFocus={() => setOpen(true)}>?</button>
+      {open && <span role="tooltip" className="tip-pop">{text}</span>}
+    </span>
+  );
+}
+
+/** Escape closes the topmost dialog. Capture phase, so the game's own Escape handling doesn't also run. */
+function useEscape(onClose: () => void) {
+  useEffect(() => {
+    const key = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.stopPropagation(); onClose(); } };
+    window.addEventListener('keydown', key, true);
+    return () => window.removeEventListener('keydown', key, true);
+  }, [onClose]);
+}
+
+export function ConfirmDialog({ title, children, confirm, onConfirm, onCancel, danger }: {
+  title: string; children: ReactNode; confirm: string; onConfirm: () => void; onCancel: () => void; danger?: boolean;
+}) {
+  const cancel = useRef<HTMLButtonElement>(null);
+  useEffect(() => { cancel.current?.focus(); }, []);
+  useEscape(onCancel);
+  return (
+    <div className="modal-backdrop confirm-backdrop" onClick={onCancel}>
+      <div className="modal confirm" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" onClick={e => e.stopPropagation()}>
+        <h2 id="confirm-title">{title}</h2>
+        <div className="confirm-body">{children}</div>
+        <div className="confirm-actions">
+          <button ref={cancel} className="action" onClick={onCancel}><strong>Cancel</strong></button>
+          <button className={`action ${danger ? 'danger' : 'primary'}`} onClick={onConfirm}><strong>{confirm}</strong></button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const noop = () => {};
+
+const MOTION: [MotionPref, string][] = [['system', 'Match device'], ['reduce', 'Reduced'], ['full', 'Full']];
+
+export function SettingsPanel({ onClose }: { onClose: () => void }) {
+  const motion = useSettings(s => s.motion);
+  const savedAt = useSaveStatus(s => s.savedAt), error = useSaveStatus(s => s.error);
+  const save = useSession(s => s.save);
+  const [confirmReset, setConfirmReset] = useState(false);
+  useEscape(confirmReset ? noop : onClose);
+  const hasSave = save?.kind === 'ok' || savedAt !== null;
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal settings" role="dialog" aria-modal="true" aria-label="Settings" onClick={e => e.stopPropagation()}>
+        <button className="close" onClick={onClose}>Close</button>
+        <div className="eyebrow">Settings</div>
+        <h2>Settings</h2>
+        <h4>Motion</h4>
+        <div className="seg" role="radiogroup" aria-label="Motion">
+          {MOTION.map(([id, label]) => <button key={id} role="radio" aria-checked={motion === id} className={motion === id ? 'on' : ''} onClick={() => setMotion(id)}>{label}</button>)}
+        </div>
+        <p className="muted small">Reduced motion stops the menu camera drifting and turns off pulsing highlights and swaying effects.</p>
+        <h4>Your saved farm</h4>
+        <p className="small">
+          {save?.kind === 'unavailable' ? 'This browser is blocking site storage, so the game can\'t save here.' : hasSave ? `${savedLabel(savedAt)}. ` : 'No saved farm yet. '}
+          The game saves automatically to this browser on this device. Nothing is sent online.
+        </p>
+        {error && <div className="alert danger">{error}</div>}
+        <button className="action danger" disabled={!hasSave} onClick={() => setConfirmReset(true)}><strong>Reset save</strong><small>Delete the saved farm from this device</small></button>
+      </div>
+      {confirmReset && (
+        <ConfirmDialog title="Delete your saved farm?" confirm="Delete save" danger onCancel={() => setConfirmReset(false)}
+          onConfirm={() => { setConfirmReset(false); onClose(); resetSave(); }}>
+          <p>This permanently removes your farm, cash, contracts and progress from this browser. It can&apos;t be undone.</p>
+        </ConfirmDialog>
+      )}
+    </div>
+  );
+}
+
+/** The in-game ☰ menu: help, settings, and a way back to the title screen. */
+export function GameMenu({ onClose }: { onClose: () => void }) {
+  const [view, setView] = useState<'menu' | 'help' | 'settings'>('menu');
+  useEscape(view === 'menu' ? onClose : noop);
+  if (view === 'help') return <HowToPlay onClose={() => setView('menu')} />;
+  if (view === 'settings') return <SettingsPanel onClose={() => setView('menu')} />;
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal game-menu" role="dialog" aria-modal="true" aria-label="Menu" onClick={e => e.stopPropagation()}>
+        <div className="eyebrow">Harvest to Harbor</div>
+        <h2>Menu</h2>
+        <SaveIndicator />
+        <div className="menu-list">
+          <button className="action primary" onClick={onClose}><strong>Resume</strong></button>
+          <button className="action" onClick={() => setView('help')}><strong>How to play</strong></button>
+          <button className="action" onClick={() => setView('settings')}><strong>Settings</strong></button>
+          <button className="action" onClick={() => { onClose(); toTitle(); }}><strong>Save &amp; main menu</strong></button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Concise reference for the core loop and controls. */
+export function HowToPlay({ onClose }: { onClose: () => void }) {
+  useEscape(onClose);
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal howto" role="dialog" aria-modal="true" aria-label="How to play" onClick={e => e.stopPropagation()}>
+        <button className="close" onClick={onClose}>Close</button>
+        <div className="eyebrow">How to play</div>
+        <h2>Farm, process, export</h2>
+        <div className="howto-grid">
+          <section>
+            <h4>🎮 Move and interact</h4>
+            <p><b>Keyboard and mouse:</b> walk with <kbd>WASD</kbd> or the arrow keys (hold <kbd>Shift</kbd> to run), or click the ground. Press <kbd>E</kbd> beside a plot, building or person. Scroll or <kbd>+</kbd>/<kbd>−</kbd> to zoom.</p>
+            <p><b>Touch:</b> tap the ground to walk; tap a plot, building or person to go and use it. Pinch to zoom.</p>
+          </section>
+          <section>
+            <h4>🌱 Grow</h4>
+            <p>Prepare a plot (ridges drain wet low ground), plant seed, then keep soil moisture between 30% and 85%. Inspect beds to find hidden pests and disease before they spread.</p>
+          </section>
+          <section>
+            <h4>🌙 Days</h4>
+            <p>Every action costs energy. <b>End day</b> to grow crops, change the weather, pay wages and refill energy. Check the 5-day forecast before storms.</p>
+          </section>
+          <section>
+            <h4>🏭 Process</h4>
+            <p>Fresh ginger spoils and sells cheap. Wash, sort and slice it, dry it on the racks to <b>{SAFE_MOISTURE}% moisture or less</b>, then bag it. Sealed bags keep damp out and earn better grades.</p>
+          </section>
+          <section>
+            <h4>💰 Sell and export</h4>
+            <p>Grade (Premium, A, B, C) sets the price. Compare buyers in Storage, sign contracts in Trade, and ship export orders through Lagos. Late or failed deliveries cost money and reputation.</p>
+          </section>
+          <section>
+            <h4>💾 Saving</h4>
+            <p>The game saves automatically to this browser after every meaningful action and each night. Use <b>Continue Farming</b> on the title screen to pick up where you left off.</p>
+          </section>
+        </div>
+      </div>
+    </div>
+  );
+}

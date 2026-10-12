@@ -1,17 +1,26 @@
 'use client';
 import {
-  ENERGY, FERTILIZER_COST, PREP, SEEDS, TREATMENTS, canHarvest, effectiveDrainage, expectedQuality, expectedYieldKg,
+  ENERGY, FERTILIZER_COST, GRADE_MULT, PREP, SEEDS, TREATMENTS, canHarvest, effectiveDrainage, expectedQuality, expectedYieldKg,
   gradeForBatch, isUnlocked, isWet, lockedReason, money, plotName,
 } from '../../game/simulation';
 import type { PrepMethod, SeedTier } from '../../game/types';
 import { useGameStore } from '../../stores/gameStore';
+import { Tip } from './Menus';
+
+const TIPS = {
+  growth: 'Ginger can be harvested from 70% growth. It is mature at 100%, when the leaves yellow.',
+  health: 'Pests, leaf spot and rot lower health, and with it your yield and grade. Inspect to find the cause.',
+  moisture: 'Ginger likes 30–85%. Dry beds grow slowly; waterlogged beds rot. Ridges drain wet ground faster.',
+  fertility: 'Feeds growth and quality. Fertiliser adds it back; rain washes half of it away.',
+};
+export const GRADE_TIP = `Grade sets the price: ${Object.entries(GRADE_MULT).map(([g, m]) => `${g} ×${m}`).join(', ')} of market. Quality, moisture, soil and packaging decide it.`;
 
 const TERRAIN = ['Upland: drains fast, dries out', 'Gentle slope', 'Lower field', 'Stream bottom: fertile but floods'];
 
-function Bar({ label, value, warn }: { label: string; value: number; warn?: boolean }) {
+function Bar({ label, value, warn, tip }: { label: string; value: number; warn?: boolean; tip?: string }) {
   return (
     <div className="bar">
-      <div className="bar-label"><span>{label}</span><b className={warn ? 'warn' : ''}>{Math.round(value)}%</b></div>
+      <div className="bar-label"><span>{label}{tip && <> <Tip text={tip} align="left" /></>}</span><b className={warn ? 'warn' : ''}>{Math.round(value)}%</b></div>
       <div className="progress"><i style={{ width: `${Math.min(100, value)}%`, background: warn ? 'var(--orange)' : undefined }} /></div>
     </div>
   );
@@ -34,10 +43,10 @@ export default function PlotPanel() {
       <small className="muted">{TERRAIN[p.z]} · drainage {Math.round(effectiveDrainage(p) * 100)}%{p.seed ? ` · ${SEEDS[p.seed].label}` : ''}</small>
 
       <div className="bars">
-        {cropped && <Bar label="Growth" value={p.growth} />}
-        {cropped && <Bar label="Health" value={p.health} warn={p.health < 70} />}
-        <Bar label="Soil moisture" value={p.moisture} warn={p.moisture < 30 || p.moisture > 85} />
-        <Bar label="Fertility" value={p.fertility} warn={p.fertility < 30} />
+        {cropped && <Bar label="Growth" value={p.growth} tip={TIPS.growth} />}
+        {cropped && <Bar label="Health" value={p.health} warn={p.health < 70} tip={TIPS.health} />}
+        <Bar label="Soil moisture" value={p.moisture} warn={p.moisture < 30 || p.moisture > 85} tip={TIPS.moisture} />
+        <Bar label="Fertility" value={p.fertility} warn={p.fertility < 30} tip={TIPS.fertility} />
       </div>
       {p.issue?.detected && <div className="alert danger">{TREATMENTS[p.issue.kind].name}: severity {Math.round(p.issue.severity)}%</div>}
       {cropped && !p.issue?.detected && p.health < 85 && <div className="alert">Health is slipping. Inspect to find out why.</div>}
@@ -68,7 +77,7 @@ export default function PlotPanel() {
 
       {cropped && <div className="harvest-box">
         {canHarvest(p) ? <>
-          <div className="modal-row"><span>Harvest now</span><b>≈{Math.round(yieldNow)} kg · Grade {gradeNow}</b></div>
+          <div className="modal-row"><span>Harvest now</span><b>≈{Math.round(yieldNow)} kg · Grade {gradeNow} <Tip text={GRADE_TIP} align="right" /></b></div>
           <small className="muted">{p.status === 'growing' ? 'Early harvest: smaller rhizomes, lower quality. Cash sooner and no more weather risk.'
             : p.daysReady < 4 ? 'Waiting adds ~3% yield a day for a few days, but rot and storm risk keep rising.'
             : 'Left too long: rhizomes are turning fibrous and rot risk is climbing.'}</small>

@@ -3,7 +3,8 @@ import { LITRES_PER_FUEL_LITRE, NPCS, currentMission, fuelPrice, money, npcAdvic
 import { useGameStore, type Target } from '../../stores/gameStore';
 import { STATIONS } from '../world/layout';
 
-function describe(t: Target, plots: { x: number; z: number; status: string }[]) {
+/** "Prepare plot B2", "Talk to Baba Musa": what pressing E next to this target will do. */
+export function describeTarget(t: Target, plots: { x: number; z: number; status: string }[]) {
   if (t.kind === 'plot') {
     const p = plots[t.id];
     const verb = p.status === 'empty' ? 'Prepare' : p.status === 'prepared' ? 'Plant' : p.status === 'ready' ? 'Harvest' : 'Tend';
@@ -11,19 +12,6 @@ function describe(t: Target, plots: { x: number; z: number; status: string }[]) 
   }
   if (t.kind === 'npc') return `Talk to ${NPCS[t.id].name}`;
   return STATIONS[t.id].label;
-}
-
-/** "[E] Talk to Baba Musa": shown when the player stands next to something usable. */
-export function InteractPrompt() {
-  const s = useGameStore();
-  const t = s.nearby;
-  const busy = s.selectedPlot !== null || s.talkingTo || s.tankOpen || s.panel !== 'farm';
-  if (!t || busy) return null;
-  return (
-    <button className="interact-prompt" onClick={() => s.interact(t)}>
-      <kbd className="hint-mouse">E</kbd><kbd className="hint-touch">Tap</kbd> {describe(t, s.plots)}
-    </button>
-  );
 }
 
 export function TankCard() {
