@@ -79,7 +79,7 @@ export function inspectPlotReport(p: Plot): InspectionReport {
   };
 }
 
-const PRODUCT_LABEL = { fresh: 'Fresh ginger', dried: 'Dried ginger', powder: 'Ginger powder' } as const;
+const PRODUCT_LABEL = { fresh: 'Fresh ginger', dried: 'Dried ginger', powder: 'Ginger powder', soybean: 'Soybean grain' } as const;
 
 export function inspectBatchReport(b: Batch, day: number): InspectionReport {
   const grade = gradeForBatch(b);

@@ -8,6 +8,7 @@ import { describeLevelUp, levelFromXp } from './levels';
 import { CAMPAIGN } from './missions';
 import type { GameState, LogLine, PlayerProfile, Plot } from './types';
 import { buildForecast, initialWeatherQueue } from './weather';
+import { calculateCrewPerks, generateInitialCandidates } from './workers';
 
 const LOG_LIMIT = 60;
 
@@ -24,6 +25,10 @@ export function makePlot(id: number, x: number, z: number): Plot {
   return {
     id, x, z, status: 'empty', drainage: row.drainage, fertility: row.fertility + (x % 2 ? 4 : -3), moisture: row.moisture,
     health: 100, growth: 0, ridged: false, seed: null, stand: 0, germinated: false, daysReady: 0, issue: null,
+    organicMatter: 35 + (z * 3) + (x % 2 ? 2 : -2),
+    compaction: 20 - (z * 2),
+    diseasePressure: { rot: 0, leafSpot: 0, pest: 0 },
+    cropHistory: [],
   };
 }
 
@@ -64,8 +69,23 @@ export function initialState(seed = 20261010): GameState {
       processingWorkers: 0,
       autoOpenRacks: true,
       autoBagRacks: false,
+      bagPackaging: 'bulk',
+      autoMill: false,
+      millPackaging: 'sealed',
+      autoReserve: false,
     },
+    stock: { local: 0, improved: 0, certified: 0, soybean: 0, fertilizer: 0, compost: 0 },
+    opSeq: 1,
     workers: 0,
+    crew: [],
+    candidates: generateInitialCandidates(rng),
+    ledger: [],
+    prestige: [],
+    recurringGoals: [],
+    cooperativeEvents: [],
+    coopRoadBenefitDays: 0,
+    sandboxMode: false,
+    difficulty: 'normal',
     upgrades: { irrigation: false, warehouseLevel: 0, tankLevel: 0, insurance: false, mill: false, solarDryer: false, factory: false, landLeased: 0 },
     weather: 'sunny', weatherQueue, forecast,
     market: { ...BASE_PRICES }, fxRate: FX_BASE, priceHistory: [{ day: 1, ...BASE_PRICES }],
@@ -84,17 +104,27 @@ export function initialState(seed = 20261010): GameState {
 }
 
 export const plotName = (p: Pick<Plot, 'x' | 'z'>) => `${'ABCD'[p.z]}${p.x + 1}`;
-export const effectiveDrainage = (p: Plot) => Math.min(1, p.drainage + (p.ridged ? PREP.ridge.drainageBonus : 0));
+export const effectiveDrainage = (p: Plot) =>
+  Math.max(0.1, Math.min(1, (p.drainage + (p.ridged ? PREP.ridge.drainageBonus : 0)) * (1 - (p.compaction ?? 20) * 0.003)));
 export const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
 export const money = (n: number) => `₦${Math.round(n).toLocaleString()}`;
 
 export const tankCapacity = (s: GameState) => TANK_BASE_LITRES + s.upgrades.tankLevel * TANK_UPGRADE_LITRES;
 export const warehouseCapacity = (s: GameState) => WAREHOUSE_BASE_KG + s.upgrades.warehouseLevel * WAREHOUSE_UPGRADE_KG;
-export const storedKg = (s: GameState) => s.batches.reduce((sum, b) => sum + b.kg, 0);
+export const stockKg = (s: GameState) =>
+  s.stock
+    ? (s.stock.local ?? 0) * 20 +
+      (s.stock.improved ?? 0) * 20 +
+      (s.stock.certified ?? 0) * 20 +
+      (s.stock.soybean ?? 0) * 15 +
+      (s.stock.fertilizer ?? 0) * 50 +
+      (s.stock.compost ?? 0) * 25
+    : 0;
+export const storedKg = (s: GameState) => s.batches.reduce((sum, b) => sum + b.kg, 0) + stockKg(s);
 export const hasEvent = (s: GameState, kind: GameState['events'][number]['kind']) => s.events.find(e => e.kind === kind);
 export const fuelPrice = (s: GameState) => FUEL_PRICE * (hasEvent(s, 'fuelSpike')?.magnitude ?? 1);
 export const availableWorkers = (s: GameState) => Math.floor(s.workers * (hasEvent(s, 'workerShortage')?.magnitude ?? 1));
-export const maxEnergy = (s: GameState) => BASE_ENERGY + availableWorkers(s) * WORKER_ENERGY;
+export const maxEnergy = (s: GameState) => BASE_ENERGY + availableWorkers(s) * WORKER_ENERGY + calculateCrewPerks(s.crew ?? []).extraEnergy;
 
 /** Returns a reason the action can't happen, or null. */
 export function blocked(s: GameState, need: { energy?: number; cash?: number }): string | null {

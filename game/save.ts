@@ -68,8 +68,23 @@ export const MIGRATIONS: Record<number, Migration> = {
           processingWorkers: 0,
           autoOpenRacks: true,
           autoBagRacks: false,
+          bagPackaging: 'bulk',
+          autoMill: false,
+          millPackaging: 'sealed',
+          autoReserve: false,
           ...((game?.automation as Json) || {}),
         },
+        stock: { local: 0, improved: 0, certified: 0, soybean: 0, fertilizer: 0, compost: 0, ...((game?.stock as Json) || {}) },
+        opSeq: typeof game?.opSeq === 'number' ? game.opSeq : 1,
+        crew: Array.isArray(game?.crew) ? game.crew : [],
+        candidates: Array.isArray(game?.candidates) ? game.candidates : [],
+        ledger: Array.isArray(game?.ledger) ? game.ledger : [],
+        prestige: Array.isArray(game?.prestige) ? game.prestige : [],
+        recurringGoals: Array.isArray(game?.recurringGoals) ? game.recurringGoals : [],
+        cooperativeEvents: Array.isArray(game?.cooperativeEvents) ? game.cooperativeEvents : [],
+        coopRoadBenefitDays: typeof game?.coopRoadBenefitDays === 'number' ? game.coopRoadBenefitDays : 0,
+        sandboxMode: typeof game?.sandboxMode === 'boolean' ? game.sandboxMode : false,
+        difficulty: typeof game?.difficulty === 'string' ? game.difficulty : 'normal',
         lastReport: game?.lastReport ? { ...(game.lastReport as Json), automation: (game.lastReport as Json).automation ?? { irrigatedPlots: 0, irrigationLitres: 0, pumpedLitres: 0, pumpingCost: 0, fertilizedPlots: 0, fertilizerCost: 0, coveredRacks: 0, irrigationNeedsRepair: false } } : null,
       },
     };
@@ -99,6 +114,12 @@ const ELEMENT_KEYS: Record<string, string[]> = {
   contracts: ['id', 'buyerId', 'kg', 'status', 'deadlineDay'],
   shipments: ['id', 'contractId', 'stage', 'daysLeft'],
   loans: ['id', 'balance', 'dueDay'],
+  crew: ['id', 'name', 'role', 'level'],
+  candidates: ['id', 'name', 'role', 'hireCost'],
+  ledger: ['id', 'day', 'category', 'amount'],
+  prestige: ['id', 'title', 'category'],
+  recurringGoals: ['id', 'title', 'targetKg'],
+  cooperativeEvents: ['id', 'type', 'status'],
 };
 const SKIP = new Set<string>(TRANSIENT_KEYS);
 
@@ -198,9 +219,24 @@ export function parseSave(raw: string | null, migrations: Record<number, Migrati
         processingWorkers: 0,
         autoOpenRacks: true,
         autoBagRacks: false,
+        bagPackaging: 'bulk',
+        autoMill: false,
+        millPackaging: 'sealed',
+        autoReserve: false,
         ...(g.automation as Json),
       };
     }
+    g.stock = { local: 0, improved: 0, certified: 0, soybean: 0, fertilizer: 0, compost: 0, ...((g.stock as Json) || {}) };
+    g.opSeq = typeof g.opSeq === 'number' ? g.opSeq : 1;
+    if (!Array.isArray(g.crew)) g.crew = [];
+    if (!Array.isArray(g.candidates)) g.candidates = [];
+    if (!Array.isArray(g.ledger)) g.ledger = [];
+    if (!Array.isArray(g.prestige)) g.prestige = [];
+    if (!Array.isArray(g.recurringGoals)) g.recurringGoals = [];
+    if (!Array.isArray(g.cooperativeEvents)) g.cooperativeEvents = [];
+    if (typeof g.coopRoadBenefitDays !== 'number') g.coopRoadBenefitDays = 0;
+    if (typeof g.sandboxMode !== 'boolean') g.sandboxMode = false;
+    if (typeof g.difficulty !== 'string') g.difficulty = 'normal';
   }
   const problem = validateGame(migrated.game) ?? validateMeta(migrated.meta);
   if (problem) return invalid(problem);

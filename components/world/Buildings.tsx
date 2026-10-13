@@ -87,20 +87,61 @@ export function Farmhouse() {
 export function Warehouse() {
   const b = BUILDINGS.warehouse;
   const batches = useGameStore(s => s.batches);
-  const over = useGameStore(s => storedKg(s) > warehouseCapacity(s));
-  // Sacks pile up out front where the player can see the harvest: brown jute for fresh, beige for dried,
-  // white for sealed export bags, golden flat bags for powder. One sack ≈ 100 kg fresh or 50 kg processed.
+  const stock = useGameStore(s => s.stock);
+  const totalKg = useGameStore(s => storedKg(s));
+  const capacity = useGameStore(s => warehouseCapacity(s));
+  const over = totalKg > capacity;
+  const nearFull = !over && totalKg >= capacity * 0.85;
+
+  // Sacks pile up: brown jute for fresh, beige for dried, white for sealed export bags,
+  // golden flat for powder, green-tan for soybean.
   const sacks = batches.flatMap(x => Array.from({ length: Math.ceil(x.kg / (x.product === 'fresh' ? 100 : 50)) }, () => x)).slice(0, 40)
-    .map(x => ({ flat: x.product === 'powder', tint: x.product === 'fresh' ? '#b58a5a' : x.product === 'powder' ? '#f0cd73' : x.packaging === 'sealed' ? '#f6f6f2' : '#d9c39a' }));
+    .map(x => ({
+      flat: x.product === 'powder',
+      tint: x.product === 'fresh'
+        ? '#b58a5a'
+        : x.product === 'powder'
+        ? '#f0cd73'
+        : x.product === 'soybean'
+        ? '#7ba05b'
+        : x.packaging === 'sealed'
+        ? '#f6f6f2'
+        : '#d9c39a',
+    }));
+
+  const fertSacks = Math.min(6, stock?.fertilizer ?? 0);
+  const compostSacks = Math.min(6, stock?.compost ?? 0);
+
   return (
     <group position={[b.pos[0], 0, b.pos[2]]}>
       <BlockBuilding w={b.size[0]} d={b.size[1]} h={3.2} wall="#d8d3c6" band="#3f6e8c" door="open" />
       <Text position={[0, 2.75, b.size[1] / 2 + 0.05]} fontSize={0.3} color="#22313b">STORE</Text>
       {sacks.map((sack, i) => {
-        const row = Math.floor(i / 10), col = i % 10;
-        return <Model key={i} model={sack.flat ? 'sackFlat' : 'sack'} tint={sack.tint} scale={sack.flat ? 1.3 : 1.6} position={[-2.6 + col * 0.55, 0, b.size[1] / 2 + 0.5 + row * 0.55]} rotation={[0, (i * 1.7) % 0.6, 0]} />;
+        const layer = Math.floor(i / 20);
+        const idx = i % 20;
+        const row = Math.floor(idx / 5);
+        const col = idx % 5;
+        const y = layer * 0.35;
+        return (
+          <Model
+            key={`sack-${i}`}
+            model={sack.flat ? 'sackFlat' : 'sack'}
+            tint={sack.tint}
+            scale={sack.flat ? 1.3 : 1.55}
+            position={[-2.4 + col * 0.58, y, b.size[1] / 2 + 0.5 + row * 0.55]}
+            rotation={[0, (i * 1.7) % 0.6, 0]}
+          />
+        );
       })}
-      {over && <Text position={[0, 3.9, b.size[1] / 2]} fontSize={0.28} color="#f4a35c">OVER CAPACITY</Text>}
+      {/* Input inventory stacks placed by the warehouse wall */}
+      {Array.from({ length: fertSacks }, (_, i) => (
+        <Model key={`fert-${i}`} model="sack" tint="#3a6ea5" scale={1.4} position={[2.4, i * 0.28, b.size[1] / 2 + 0.6]} rotation={[0, 0.4, 0]} />
+      ))}
+      {Array.from({ length: compostSacks }, (_, i) => (
+        <Model key={`comp-${i}`} model="sack" tint="#4a3728" scale={1.4} position={[3.1, i * 0.28, b.size[1] / 2 + 0.6]} rotation={[0, -0.3, 0]} />
+      ))}
+      {over && <Text position={[0, 3.8, b.size[1] / 2]} fontSize={0.28} color="#e65100">OVER CAPACITY</Text>}
+      {nearFull && <Text position={[0, 3.8, b.size[1] / 2]} fontSize={0.24} color="#f59e0b">STORE AT CAPACITY</Text>}
       <Model model="boxLarge" position={[3.3, 0, 1]} scale={3} />
       <Model model="box" position={[3.4, 0.75, 1]} scale={3} />
     </group>
@@ -109,13 +150,33 @@ export function Warehouse() {
 
 function DryingRack({ x, job }: { x: number; job?: { moisture: number; covered: boolean; quality: number } }) {
   const dryness = job ? Math.max(0, Math.min(1, (80 - job.moisture) / (80 - SAFE_MOISTURE))) : 0;
+  const isWetFresh = job && job.moisture > 65;
+  const isExportReady = job && job.moisture <= SAFE_MOISTURE && job.quality >= 75;
   const sliceColor = job ? `hsl(${42 - dryness * 10}, ${55 - (100 - job.quality) * 0.3}%, ${78 - dryness * 22}%)` : '#000';
   return (
     <group position={[x, 0, 0]}>
       {[[-0.6, -0.9], [0.6, -0.9], [-0.6, 0.9], [0.6, 0.9]].map(([lx, lz]) => <mesh key={`${lx}${lz}`} position={[lx, 0.4, lz]}><boxGeometry args={[0.06, 0.8, 0.06]} /><meshStandardMaterial color="#6b4c2e" /></mesh>)}
       <mesh position={[0, 0.82, 0]} receiveShadow><boxGeometry args={[1.35, 0.04, 2]} /><meshStandardMaterial color="#77736a" wireframe /></mesh>
-      {job && <mesh position={[0, 0.85, 0]}><boxGeometry args={[1.25, 0.03, 1.9]} /><meshStandardMaterial color={sliceColor} roughness={1} /></mesh>}
-      {job?.covered && <mesh position={[0, 1.05, 0]}><boxGeometry args={[1.45, 0.4, 2.1]} /><meshStandardMaterial color="#2f6db5" roughness={0.6} /></mesh>}
+      {job && (
+        <mesh position={[0, 0.85, 0]}>
+          <boxGeometry args={[1.25, 0.03, 1.9]} />
+          <meshStandardMaterial color={sliceColor} roughness={isWetFresh ? 0.25 : 0.95} metalness={isWetFresh ? 0.15 : 0} />
+        </mesh>
+      )}
+      {/* Export ready stamp indicator on rack when safe moisture <= 12% and quality >= 75 */}
+      {isExportReady && !job?.covered && (
+        <group position={[0, 0.88, 0.88]}>
+          <mesh><boxGeometry args={[0.65, 0.02, 0.15]} /><meshStandardMaterial color="#2d6a4f" /></mesh>
+          <Text position={[0, 0.02, 0]} rotation={[-Math.PI / 2, 0, 0]} fontSize={0.08} color="#e8f5e9">EXPORT SAFE</Text>
+        </group>
+      )}
+      {/* Realistic blue tarpaulin cover with draped ridge */}
+      {job?.covered && (
+        <group position={[0, 1.05, 0]}>
+          <mesh><boxGeometry args={[1.45, 0.4, 2.1]} /><meshStandardMaterial color="#1f538d" roughness={0.5} /></mesh>
+          <mesh position={[0, 0.22, 0]}><boxGeometry args={[1.4, 0.05, 2.05]} /><meshStandardMaterial color="#163e6b" roughness={0.6} /></mesh>
+        </group>
+      )}
     </group>
   );
 }

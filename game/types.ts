@@ -1,19 +1,35 @@
 export type PlotStatus = 'empty' | 'prepared' | 'growing' | 'ready';
 export type QualityGrade = 'Premium' | 'A' | 'B' | 'C';
 export type Weather = 'sunny' | 'cloudy' | 'rain' | 'heavyRain' | 'storm' | 'heatwave';
-export type Product = 'fresh' | 'dried' | 'powder';
+export type Product = 'fresh' | 'dried' | 'powder' | 'soybean';
 export type Packaging = 'bulk' | 'sealed';
 export type WashMethod = 'rinse' | 'thorough';
 export type SortLevel = 'none' | 'standard' | 'strict';
 export type CutStyle = 'split' | 'sliced';
 export type NpcId = 'baba' | 'amaka' | 'chinedu';
 export type SeedTier = 'local' | 'improved' | 'certified';
+export type CropType = 'ginger' | 'soybean';
 export type PrepMethod = 'clear' | 'ridge';
 export type IssueKind = 'pest' | 'leafSpot' | 'rot';
 export type EventKind = 'priceCrash' | 'fuelSpike' | 'workerShortage';
 export type Severity = 'info' | 'good' | 'warning' | 'danger';
+/** Purchasable farm inputs held in the warehouse. */
+export type InputItem = SeedTier | 'soybean' | 'fertilizer' | 'compost';
+export type Stock = Record<InputItem, number>;
 
 export interface CropIssue { kind: IssueKind; severity: number; detected: boolean; }
+
+export interface CropHistoryEntry {
+  crop: CropType;
+  season: number;
+  harvestDay: number;
+  yieldKg?: number;
+  grade?: QualityGrade;
+  fertilityChange: number;
+  organicMatterChange: number;
+  diseaseExperienced?: IssueKind[];
+  greenManured?: boolean;
+}
 
 export interface Plot {
   id: number; x: number; z: number;
@@ -31,6 +47,16 @@ export interface Plot {
   germinated: boolean;
   daysReady: number;
   issue: CropIssue | null;
+  /** Active crop planted on this bed. Defaults to 'ginger' when seed is set. */
+  crop?: CropType;
+  /** Soil organic matter % (0-100%). Buffers drought and improves nutrient retention. */
+  organicMatter: number;
+  /** Subsoil compaction % (0-100%). Hardpan impedes drainage and roots; broken by ridges/taproots. */
+  compaction: number;
+  /** Soilborne pathogen reservoir (0-100% per disease). Breaks down with crop rotation. */
+  diseasePressure: Record<IssueKind, number>;
+  /** Historical record of the last crops grown on this bed. */
+  cropHistory: CropHistoryEntry[];
 }
 
 export interface Batch {
@@ -45,6 +71,8 @@ export interface Batch {
   packaging?: Packaging;
   /** Soil left on poorly washed ginger: a foreign-matter defect that caps the grade at B. */
   soiled?: boolean;
+  /** Contract id this stock is set aside for. Reserved stock can't be sold, milled or shipped elsewhere. */
+  reservedFor?: number | null;
 }
 
 /** Choices made at the washing, sorting and slicing stations before ginger goes on the racks. */
@@ -94,6 +122,13 @@ export interface AutomationSettings {
   processingWorkers: number;
   autoOpenRacks: boolean;
   autoBagRacks: boolean;
+  /** Packaging the processing crew uses when it bags a finished rack. */
+  bagPackaging: Packaging;
+  /** Factory: mill eligible dried stock into powder each morning. */
+  autoMill: boolean;
+  millPackaging: Packaging;
+  /** Set eligible stock aside for active contracts each morning. */
+  autoReserve: boolean;
 }
 
 export interface AutomationSummary {
@@ -115,6 +150,11 @@ export interface AutomationSummary {
   harvestedKg?: number;
   openedRacks?: number;
   baggedRacks?: number;
+  milledBatches?: number;
+  milledKg?: number;
+  reservedKg?: number;
+  /** Plain-language reasons automated jobs could not run this morning. */
+  blocked?: string[];
 }
 
 export interface InspectionReport {
@@ -231,6 +271,105 @@ export interface PlayerProfile {
   theme: ThemeId;
 }
 
+export type WorkerRole = 'general' | 'agronomist' | 'tillageSpecialist' | 'masterProcessor' | 'logisticsCaptain';
+export type WorkerLevel = 'rookie' | 'experienced' | 'master';
+export type WorkerTrait = 'rainReader' | 'carefulHandler' | 'mechanic' | 'stamina';
+
+export interface WorkerProfile {
+  id: number;
+  name: string;
+  role: WorkerRole;
+  level: WorkerLevel;
+  xp: number;
+  dailyWage: number;
+  daysEmployed: number;
+  trait: WorkerTrait;
+  morale: number;
+}
+
+export interface WorkerCandidate {
+  id: number;
+  name: string;
+  role: WorkerRole;
+  level: WorkerLevel;
+  dailyWage: number;
+  hireCost: number;
+  trait: WorkerTrait;
+  bio: string;
+}
+
+export type LedgerCategory =
+  | 'domesticSales'
+  | 'exportSales'
+  | 'processingRevenue'
+  | 'inputCost'
+  | 'fuelUtilities'
+  | 'wages'
+  | 'equipmentMaintenance'
+  | 'processingPackaging'
+  | 'logistics'
+  | 'insurancePremium'
+  | 'insurancePayout'
+  | 'loanInterest'
+  | 'loanPenalty'
+  | 'capitalExpenditure'
+  | 'loanProceeds'
+  | 'loanRepayment';
+
+export type LedgerEntryType = 'revenue' | 'cogs' | 'opex' | 'financing' | 'capex';
+
+export interface LedgerEntry {
+  id: string;
+  day: number;
+  category: LedgerCategory;
+  type: LedgerEntryType;
+  amount: number;
+  direction: 'inflow' | 'outflow';
+  referenceId?: string;
+  description: string;
+  finalized: boolean;
+}
+
+export type PrestigeCategory = 'export' | 'quality' | 'finance' | 'agronomy' | 'community';
+
+export interface PrestigeRecord {
+  id: string;
+  title: string;
+  category: PrestigeCategory;
+  description: string;
+  unlockedDay: number;
+  badge: string;
+}
+
+export interface RecurringGoal {
+  id: string;
+  season: number;
+  title: string;
+  description: string;
+  targetKg: number;
+  product: Product;
+  minQuality: number;
+  buyer: string;
+  deadlineDay: number;
+  rewardMoney: number;
+  rewardReputation: number;
+  progressKg: number;
+  completed: boolean;
+}
+
+export interface CooperativeEvent {
+  id: string;
+  type: 'water_sharing' | 'road_repair';
+  title: string;
+  description: string;
+  costLabel: string;
+  benefitLabel: string;
+  waterCost?: number;
+  cashCost?: number;
+  expiresDay: number;
+  status: 'pending' | 'accepted' | 'declined';
+}
+
 export interface GameState {
   day: number; cash: number; energy: number; xp: number; reputation: number; level: number;
   /** Seeded RNG state. All randomness flows through it so a run is reproducible. */
@@ -244,7 +383,20 @@ export interface GameState {
   /** 0-100. Dirty emitters eventually stop the automatic drip lines until repaired. */
   irrigationCondition: number;
   automation: AutomationSettings;
+  /** Seed and fertilizer bought ahead and held in the warehouse. */
+  stock: Stock;
+  /** Increments on every bulk operation so a stale or double-clicked preview can't run twice. */
+  opSeq: number;
   workers: number;
+  crew: WorkerProfile[];
+  candidates: WorkerCandidate[];
+  ledger: LedgerEntry[];
+  prestige?: PrestigeRecord[];
+  recurringGoals?: RecurringGoal[];
+  cooperativeEvents?: CooperativeEvent[];
+  coopRoadBenefitDays?: number;
+  sandboxMode?: boolean;
+  difficulty?: 'normal' | 'entrepreneur' | 'hardcore';
   upgrades: Upgrades;
   weather: Weather;
   /** The real upcoming weather. Hidden from the player; they only see `forecast`. */

@@ -7,12 +7,20 @@ import Field from './world/Field';
 import { TutorialBeacon, WorldPrompt } from './world/Guides';
 import Nature from './world/Nature';
 import Weather from './world/Weather';
-import { walkTo } from './world/playerState';
+import { view, walkTo } from './world/playerState';
 
 /** Invisible ground plane: click anywhere to walk there. */
 function WalkPlane() {
   return (
-    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.005, 0]} onClick={e => { e.stopPropagation(); walkTo(e.point); }}>
+    <mesh
+      rotation={[-Math.PI / 2, 0, 0]}
+      position={[0, 0.005, 0]}
+      onClick={e => {
+        e.stopPropagation();
+        if (view.mode === 'inspect') return;
+        walkTo(e.point);
+      }}
+    >
       <planeGeometry args={[80, 80]} />
       <meshBasicMaterial transparent opacity={0} depthWrite={false} />
     </mesh>

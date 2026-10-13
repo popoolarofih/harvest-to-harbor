@@ -50,6 +50,41 @@ export const HIRE_COST = 5_000;
 export const INSURANCE_PREMIUM = 2_500;
 export const INSURANCE_COVER = 0.7;
 export const PLOTS_PER_FIELD_WORKER = 8;
+/** Daily labour points per field worker. Ops cost their ENERGY value: 8 ridged plantings (6 + 2) per worker. */
+export const FIELD_LABOUR_POINTS = PLOTS_PER_FIELD_WORKER * (6 + 2);
+/** Dried kg one processing worker can feed through the factory mill per day. */
+export const MILL_KG_PER_WORKER = 400;
+
+// ---- Farm inputs bought ahead (Phase 7 & 8) ----
+/** Length of a planting season in days. Input prices follow a deterministic seasonal cycle over it. */
+export const SEASON_DAYS = 60;
+/** Warehouse kg one unit occupies: setts/seeds for one bed, or bags of fertilizer/compost. */
+export const INPUT_KG = { local: 20, improved: 20, certified: 20, soybean: 15, fertilizer: 50, compost: 25 } as const;
+/**
+ * Seasonal price swing. Store price = list × (1 − amp + amp·cos(2π·seasonDay/SEASON_DAYS)):
+ * full list price at the start of a season (planting demand), lowest (list × (1 − 2·amp)) mid-season.
+ */
+export const SEASONAL_AMPLITUDE = { seed: 0.075, soybean: 0.05, fertilizer: 0.05, compost: 0.03 } as const;
+/** Volume discounts on one purchase, largest qualifying tier applies. */
+export const BULK_DISCOUNTS = [{ min: 25, discount: 0.1 }, { min: 10, discount: 0.06 }, { min: 5, discount: 0.03 }] as const;
+export const INPUT_BUNDLES = [5, 10, 25] as const;
+
+// ---- Soil Health & Crop Rotation (Phase 8) ----
+export const SOYBEAN_SEED_COST = 3_500;
+export const SOYBEAN_BASE_YIELD_KG = 75;
+export const SOYBEAN_GROWTH_MULT = 1.35;
+export const SOYBEAN_NITROGEN_GAIN = 20; // +20 fertility fixed from atmosphere
+export const SOYBEAN_OM_GAIN = 10;        // +10% organic matter on harvest
+export const SOYBEAN_ROT_SUPPRESSION = 0.5; // cuts rot pathogen pressure in half
+export const SOYBEAN_PRICE_PER_KG = 750;
+
+export const COMPOST_COST = 3_000;
+export const COMPOST_OM_GAIN = 15;
+export const COMPOST_FERTILITY_GAIN = 15;
+export const COMPOST_COMPACTION_REDUCTION = 8;
+
+export const CONSECUTIVE_GINGER_ROT_PENALTY = 25; // +25 rot pressure
+export const CONSECUTIVE_GINGER_YIELD_PENALTY = 0.15; // -15% yield if OM < 30
 
 /** Base labour to wash, cut and spread fresh ginger, per fresh kg. Prep choices add to it. */
 export const DRYING_COST_PER_KG = 100;
@@ -149,7 +184,7 @@ export const TRADE_BUYERS: TradeBuyer[] = [
 export type UpgradeId = keyof typeof UPGRADES;
 
 /** ₦ per kg baseline the market mean-reverts toward. */
-export const BASE_PRICES: Record<Product, number> = { fresh: 600, dried: 4_500, powder: 5_800 };
+export const BASE_PRICES: Record<Product, number> = { fresh: 600, dried: 4_500, powder: 5_800, soybean: 750 };
 export const GRADE_MULT: Record<QualityGrade, number> = { Premium: 1.3, A: 1.12, B: 1, C: 0.72 };
 
 export interface Buyer {
@@ -163,6 +198,7 @@ export const BUYERS: Buyer[] = [
   { id: 'processor', name: 'Abuja spice processor', place: 'Abuja', product: 'dried', minGrade: 'B', minKg: 100, priceMult: 1.05, maxMoisture: SAFE_MOISTURE, blurb: `Premium buyer. Rejects anything above ${SAFE_MOISTURE}% moisture.` },
   { id: 'spiceSellers', name: 'Kaduna spice sellers', place: 'Kaduna', product: 'powder', minGrade: 'C', minKg: 0, priceMult: 0.8, blurb: 'Market stalls. Take any powder, any packaging.' },
   { id: 'supermarket', name: 'Abuja supermarket chain', place: 'Abuja', product: 'powder', minGrade: 'A', minKg: 50, priceMult: 1.1, maxMoisture: SAFE_MOISTURE, sealedOnly: true, blurb: 'Shelf-ready only: Grade A or Premium, in sealed bags.' },
+  { id: 'grainAggregator', name: 'Kaduna Grain & Oilseed Aggregator', place: 'Kaduna', product: 'soybean', minGrade: 'C', minKg: 0, priceMult: 1, blurb: 'Buys harvest soybean grain for local poultry feed and oil extraction.' },
 ];
 
 /** The export buyer Amaka introduces in the campaign. Reached by shipping through Lagos, not a local sale. */

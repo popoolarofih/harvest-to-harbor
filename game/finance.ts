@@ -2,6 +2,7 @@ import { BANK_LOANS, DEFAULT_PENALTY, EQUIPMENT_FINANCE, INSURANCE_PREMIUM, MAIN
 import { buyerOf, contractValue } from './contracts';
 import { applyUpgrade, ownsUpgrade, upgradeBlocked } from './economy';
 import { autoIrrigate } from './irrigation';
+import { recordLedgerEntry } from './ledger';
 import { lockedReason } from './levels';
 import { addXp, fail, log, money, spend } from './state';
 import type { GameState, LogLine } from './types';
@@ -26,7 +27,15 @@ export function takeLoan(s: GameState, index: number): GameState {
   if (totalDebt(s) + offer.amount > creditLimit(s)) return fail(s, `That would take you over your ${money(creditLimit(s))} credit limit.`);
   const loan = { id: s.nextId, kind: 'bank' as const, label: 'Bank of Agriculture loan', principal: offer.amount, balance: offer.amount, dailyRate: offer.annualRate / 365, dueDay: s.day + offer.days, defaulted: false };
   // Borrowed money is cash, not revenue.
-  const next = { ...s, cash: s.cash + offer.amount, nextId: s.nextId + 1, loans: [...s.loans, loan] };
+  let next = { ...s, cash: s.cash + offer.amount, nextId: s.nextId + 1, loans: [...s.loans, loan] };
+  next = recordLedgerEntry(next, {
+    id: `loan-take-${loan.id}`,
+    day: s.day,
+    category: 'loanProceeds',
+    amount: offer.amount,
+    referenceId: loan.id,
+    description: `BOA Working Capital Loan (+₦${offer.amount.toLocaleString()})`,
+  });
   return log({ ...next, toast: `Borrowed ${money(offer.amount)} at ${Math.round(offer.annualRate * 100)}% a year. Repay by day ${loan.dueDay}.` }, { text: `Took a ${money(offer.amount)} bank loan, due day ${loan.dueDay}.`, severity: 'info' });
 }
 
@@ -42,7 +51,23 @@ export function financeUpgrade(s: GameState, id: UpgradeId): GameState {
   if (s.cash < down) return fail(s, `You need ${money(down)} for the down payment.`);
   if (totalDebt(s) + financed > creditLimit(s)) return fail(s, `That would take you over your ${money(creditLimit(s))} credit limit.`);
   const loan = { id: s.nextId, kind: 'equipment' as const, label: `${u.label} financing`, principal: financed, balance: financed, dailyRate: EQUIPMENT_FINANCE.annualRate / 365, dueDay: s.day + EQUIPMENT_FINANCE.days, defaulted: false };
-  const installed = applyUpgrade({ ...spend(s, down), nextId: s.nextId + 1, loans: [...s.loans, loan] }, id);
+  let installed = applyUpgrade({ ...spend(s, down), nextId: s.nextId + 1, loans: [...s.loans, loan] }, id);
+  installed = recordLedgerEntry(installed, {
+    id: `finance-upgrade-down-${id}-${s.day}`,
+    day: s.day,
+    category: 'capitalExpenditure',
+    amount: down,
+    referenceId: id,
+    description: `${u.label} down payment`,
+  });
+  installed = recordLedgerEntry(installed, {
+    id: `loan-take-${loan.id}`,
+    day: s.day,
+    category: 'loanProceeds',
+    amount: financed,
+    referenceId: loan.id,
+    description: `${u.label} equipment financing credit`,
+  });
   const next = id === 'irrigation' ? autoIrrigate(installed).state : installed;
   return addXp(log({ ...next, toast: `${u.label} installed: ${money(down)} down, ${money(financed)} financed until day ${loan.dueDay}.` }, { text: `Financed ${u.label.toLowerCase()} (${money(financed)} owed).`, severity: 'info' }), 40);
 }
@@ -53,37 +78,74 @@ export function repayLoan(s: GameState, id: number, amount?: number): GameState 
   const pay = Math.min(s.cash, loan.balance, amount ?? loan.balance);
   if (pay <= 0) return fail(s, 'No cash to repay with.');
   const loans = s.loans.map(l => (l.id === id ? { ...l, balance: l.balance - pay } : l)).filter(l => l.balance > 1);
-  const next = { ...s, cash: s.cash - pay, loans, creditBlocked: loans.some(l => l.defaulted) };
+  let next = { ...s, cash: s.cash - pay, loans, creditBlocked: loans.some(l => l.defaulted) };
+  next = recordLedgerEntry(next, {
+    id: `loan-repay-${id}-${s.day}-${Math.round(pay)}`,
+    day: s.day,
+    category: 'loanRepayment',
+    amount: pay,
+    referenceId: id,
+    description: `Repaid ${money(pay)} on ${loan.label}`,
+  });
   return { ...next, toast: loans.some(l => l.id === id) ? `Repaid ${money(pay)}.` : `${loan.label} fully repaid.` };
 }
 
 /** Daily: interest accrues; loans that fall due are collected, or go into default. */
 export function tickLoans(s: GameState, lines: LogLine[]): GameState {
   let cash = s.cash, interest = 0, reputation = s.reputation;
+  let ledgerState = s;
   const loans = s.loans.flatMap(l => {
     const accrued = l.balance * l.dailyRate;
     interest += accrued;
+    if (accrued > 0) {
+      ledgerState = recordLedgerEntry(ledgerState, {
+        id: `loan-interest-${l.id}-${s.day}`,
+        day: s.day,
+        category: 'loanInterest',
+        amount: accrued,
+        referenceId: l.id,
+        description: `Daily accrued interest on ${l.label}`,
+      });
+    }
     const loan = { ...l, balance: l.balance + accrued };
     if (s.day < loan.dueDay) return [loan];
     if (cash >= loan.balance) {
       cash -= loan.balance;
+      ledgerState = recordLedgerEntry(ledgerState, {
+        id: `loan-repay-due-${l.id}-${s.day}`,
+        day: s.day,
+        category: 'loanRepayment',
+        amount: loan.balance,
+        referenceId: l.id,
+        description: `${loan.label} settlement at maturity`,
+      });
       lines.push({ text: `${loan.label} repaid in full: ${money(loan.balance)}.`, severity: 'good' });
       return [];
     }
     reputation = Math.max(0, reputation - 5);
+    const penalty = loan.balance * DEFAULT_PENALTY;
+    ledgerState = recordLedgerEntry(ledgerState, {
+      id: `loan-penalty-${l.id}-${s.day}`,
+      day: s.day,
+      category: 'loanPenalty',
+      amount: penalty,
+      referenceId: l.id,
+      description: `Default penalty on ${loan.label}`,
+    });
     lines.push({ text: `Could not repay the ${loan.label.toLowerCase()} (${money(loan.balance)} due). Default: ${Math.round(DEFAULT_PENALTY * 100)}% penalty and no new credit until it is cleared.`, severity: 'danger' });
     return [{ ...loan, balance: loan.balance * (1 + DEFAULT_PENALTY), dueDay: s.day + 30, defaulted: true }];
   });
   return {
-    ...s, cash, reputation, loans, creditBlocked: loans.some(l => l.defaulted),
-    finance: { ...s.finance, interest: s.finance.interest + interest, expenses: s.finance.expenses + (s.cash - cash) },
+    ...ledgerState, cash, reputation, loans, creditBlocked: loans.some(l => l.defaulted),
+    finance: { ...s.finance, interest: s.finance.interest + interest },
   };
 }
 
 export function maintenanceCost(s: GameState) {
   return (Object.keys(MAINTENANCE) as UpgradeId[]).reduce((sum, id) => sum + (ownsUpgrade(s, id) ? MAINTENANCE[id]! : 0), 0);
 }
-export const dailyFixedCosts = (s: GameState) => s.workers * WAGE_PER_DAY + (s.upgrades.insurance ? INSURANCE_PREMIUM : 0) + maintenanceCost(s);
+export const totalWages = (s: GameState) => (s.crew && s.crew.length > 0 ? s.crew.reduce((sum, w) => sum + w.dailyWage, 0) : s.workers * WAGE_PER_DAY);
+export const dailyFixedCosts = (s: GameState) => totalWages(s) + (s.upgrades.insurance ? INSURANCE_PREMIUM : 0) + maintenanceCost(s);
 
 export interface CashPoint { day: number; cash: number; note?: string }
 

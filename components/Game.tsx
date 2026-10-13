@@ -17,8 +17,9 @@ import { InspectionModal, MorningReport } from './hud/Reports';
 import StoragePanel from './hud/StoragePanel';
 import TradePanel from './hud/TradePanel';
 import ProfileModal from './hud/ProfileModal';
+import BulkActionsModal from './hud/BulkActionsModal';
 import { NpcCard, TankCard } from './hud/WorldCards';
-import { faceNorth, rotateStep, view, zoomBy } from './world/playerState';
+import { faceNorth, rotateStep, setCameraMode, toggleCameraMode, view, zoomBy } from './world/playerState';
 import { enableAudio, playClick, setAudioPreferences } from '../lib/audio';
 import { useSettings } from '../stores/session';
 
@@ -72,29 +73,86 @@ export default function Game() {
   );
 }
 
-/** Zoom, turn and north-up buttons. The compass needle is moved every frame without React renders. */
+/** Zoom, turn, inspect and north-up buttons. The compass needle is moved every frame without React renders. */
 function CameraControls() {
   const needle = useRef<HTMLSpanElement>(null);
+  const [inspecting, setInspecting] = useState(view.mode === 'inspect');
   useEffect(() => {
     let raf = 0, last = NaN;
     const tick = () => {
       // The needle points to north on screen: it turns opposite to the world.
       if (needle.current && view.yawNow !== last) { last = view.yawNow; needle.current.style.transform = `rotate(${-last}rad)`; }
+      if ((view.mode === 'inspect') !== inspecting) {
+        setInspecting(view.mode === 'inspect');
+      }
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, []);
+  }, [inspecting]);
+
   return (
-    <div className="zoom-ctrl" role="group" aria-label="Camera">
-      <button id="cam-zoom-in" onClick={() => zoomBy(1 / 1.2)} aria-label="Zoom in" title="Zoom in (+)">+</button>
-      <button id="cam-zoom-out" onClick={() => zoomBy(1.2)} aria-label="Zoom out" title="Zoom out (−)">−</button>
-      <button id="cam-rotate-left" className="rot" onClick={() => rotateStep(-1)} aria-label="Turn camera left" title="Turn left (Q)">⟲</button>
-      <button id="cam-rotate-right" className="rot" onClick={() => rotateStep(1)} aria-label="Turn camera right" title="Turn right (R)">⟳</button>
-      <button id="cam-north" className="compass" onClick={faceNorth} aria-label="Face north" title="North up">
-        <span ref={needle} className="needle" aria-hidden><i>N</i></span>
-      </button>
-    </div>
+    <>
+      <div className="zoom-ctrl" role="group" aria-label="Camera">
+        <button id="cam-zoom-in" onClick={() => zoomBy(1 / 1.2)} aria-label="Zoom in" title="Zoom in (+)">+</button>
+        <button id="cam-zoom-out" onClick={() => zoomBy(1.2)} aria-label="Zoom out" title="Zoom out (−)">−</button>
+        <button id="cam-rotate-left" className="rot" onClick={() => rotateStep(-1)} aria-label="Turn camera left" title="Turn left (Q)">⟲</button>
+        <button id="cam-rotate-right" className="rot" onClick={() => rotateStep(1)} aria-label="Turn camera right" title="Turn right (R)">⟳</button>
+        <button
+          id="cam-inspect"
+          className="rot"
+          onClick={() => { toggleCameraMode(); setInspecting(view.mode === 'inspect'); }}
+          aria-label="Toggle inspection mode"
+          title="Free Inspection Mode (C)"
+          style={{ background: inspecting ? '#2d6a4f' : undefined, color: inspecting ? '#fff' : undefined }}
+        >
+          🔭
+        </button>
+        <button id="cam-north" className="compass" onClick={faceNorth} aria-label="Face north" title="North up">
+          <span ref={needle} className="needle" aria-hidden><i>N</i></span>
+        </button>
+      </div>
+      {inspecting && (
+        <div
+          style={{
+            position: 'absolute',
+            bottom: '74px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            background: 'rgba(20, 28, 38, 0.94)',
+            border: '1px solid #3b82f6',
+            borderRadius: '24px',
+            padding: '6px 18px',
+            color: '#e2e8f0',
+            fontSize: '13px',
+            fontWeight: 500,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+            boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+            zIndex: 40,
+            pointerEvents: 'auto',
+          }}
+        >
+          <span>🔭 <strong>Inspection Mode</strong>: Pan with WASD / Arrows · Drag to orbit · Scroll to zoom</span>
+          <button
+            onClick={() => { setCameraMode('follow'); setInspecting(false); }}
+            style={{
+              background: '#2563eb',
+              color: '#fff',
+              border: 'none',
+              borderRadius: '12px',
+              padding: '4px 10px',
+              fontSize: '12px',
+              cursor: 'pointer',
+              fontWeight: 600,
+            }}
+          >
+            Exit (ESC / C)
+          </button>
+        </div>
+      )}
+    </>
   );
 }
 
@@ -104,6 +162,7 @@ function Hud() {
   const [compact, setCompact] = useState(false);
   const [menu, setMenu] = useState(false);
   const [confirmNew, setConfirmNew] = useState(false);
+  const [bulkModal, setBulkModal] = useState(false);
   useEffect(() => { if (!s.toast) return; const t = setTimeout(s.clearToast, 3600); return () => clearTimeout(t); }, [s.toast, s.clearToast]);
   // After the truck pulls out of the gate, follow the shipment on the map.
   const shipAt = s.fx?.kind === 'ship' ? s.fx.at : null, openPanel = s.openPanel;
@@ -171,6 +230,7 @@ function Hud() {
               <button className="action" onClick={s.pump} disabled={s.water >= tankCapacity(s)}><strong>⛽ Pump borehole</strong><small>Refill tank with fuel</small></button>
               <button className="action" onClick={() => setPanel('storage')}><strong>📦 Storage</strong><small>{Math.round(freshKg)} kg fresh · {Math.round(driedKg)} kg dried</small></button>
               <button className="action" onClick={() => setPanel('business')}><strong>🏗 Business</strong><small>Workers, insurance, upgrades</small></button>
+              <button className="action" onClick={() => setBulkModal(true)}><strong>🚜 Bulk operations</strong><small>Till, plant, water & treat</small></button>
             </div>
             {ready.length > 0 && <div className="alert good">Ready to harvest: {ready.map(plotName).join(', ')}</div>}
           </div>
@@ -220,6 +280,7 @@ function Hud() {
       <InspectionModal />
       <StoryCard />
       <LevelUpCard />
+      {bulkModal && <BulkActionsModal onClose={() => setBulkModal(false)} />}
       {menu && <GameMenu onClose={() => setMenu(false)} onOpenProfile={s.openProfile} />}
       {s.customizingProfile && <ProfileModal onClose={s.closeProfile} />}
       {confirmNew && (

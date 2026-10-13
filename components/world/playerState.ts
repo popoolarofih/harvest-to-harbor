@@ -20,6 +20,8 @@ export const ZOOM_MIN = 0.55, ZOOM_MAX = 1.7;
 /** One press of a rotate key or button turns the camera by 45 degrees. */
 export const ROTATE_STEP = Math.PI / 4;
 
+export type CameraMode = 'follow' | 'inspect';
+
 /** Camera framing, shared by the 3D camera rig, wheel/pinch/drag gestures and the HUD camera buttons. */
 export const view = {
   zoom: 1.25,
@@ -32,7 +34,22 @@ export const view = {
   yawNow: 0,
   /** Taps are ignored until this timestamp (ms) so the end of a pinch doesn't also walk the player. */
   ignoreTapsUntil: 0,
+  /** Camera mode: follow the farmer or freely inspect the whole farm. */
+  mode: 'follow' as CameraMode,
+  /** Focal center when orbiting in inspection mode. */
+  inspectFocus: new Vector3(2, 0, -5),
 };
+
+export function setCameraMode(mode: CameraMode) {
+  view.mode = mode;
+  if (mode === 'inspect') {
+    view.inspectFocus.copy(player.pos);
+  }
+}
+
+export function toggleCameraMode() {
+  setCameraMode(view.mode === 'inspect' ? 'follow' : 'inspect');
+}
 
 /** Multiply the camera distance: factor < 1 zooms in, > 1 zooms out. */
 export function zoomBy(factor: number) {

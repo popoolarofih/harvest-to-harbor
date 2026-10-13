@@ -9,7 +9,7 @@ import { isPlaying, reducedMotion, screenTurn } from '../../stores/session';
 import { Okada } from './Buildings';
 import { COLLIDERS, NPC_SPOTS, ROAD_X, STATIONS, TANK_POS, TRUCK_POS, WALK_BOUNDS, plotPosition, targetPosition, targetRadius } from './layout';
 import { Character, Model, type CharacterAnim, type ModelId } from './models';
-import { player, rotateBy, rotateStep, view, walkTo, zoomBy } from './playerState';
+import { player, rotateBy, rotateStep, setCameraMode, toggleCameraMode, view, walkTo, zoomBy } from './playerState';
 
 const WALK_SPEED = 4.2, SPRINT_SPEED = 7, BODY_RADIUS = 0.35;
 /** What the camera circles behind the title screen: roughly the middle of the farm. */
@@ -74,10 +74,14 @@ export function Player() {
       keys.current.add(e.code);
       const s = useGameStore.getState();
       if (e.code === 'KeyE' || e.code === 'Enter') { if (s.nearby) s.interact(s.nearby); }
-      if (e.code === 'Escape') s.closeOverlays();
+      if (e.code === 'Escape') {
+        if (view.mode === 'inspect') setCameraMode('follow');
+        s.closeOverlays();
+      }
       if (e.code === 'Equal' || e.code === 'NumpadAdd') zoomBy(1 / 1.15);
       if (e.code === 'Minus' || e.code === 'NumpadSubtract') zoomBy(1.15);
       const plain = !e.ctrlKey && !e.metaKey && !e.altKey;
+      if (plain && e.code === 'KeyC') toggleCameraMode();
       if (plain && e.code === 'KeyQ') rotateStep(-1);
       if (plain && e.code === 'KeyR') rotateStep(1);
     };
@@ -170,54 +174,66 @@ export function Player() {
       if (ref.current) { ref.current.position.copy(player.pos); ref.current.rotation.y = player.heading; }
       return;
     }
+    const inspect = view.mode === 'inspect';
     const k = keys.current, held = (codes: string[]) => codes.some(c => k.has(c));
     // Ease the camera heading toward where the player turned it.
     view.yawNow = reducedMotion() ? view.yaw : view.yawNow + (view.yaw - view.yawNow) * (1 - Math.exp(-dt * 9));
     if (Math.abs(view.yaw - view.yawNow) < 1e-4) view.yawNow = view.yaw;
     const sinY = Math.sin(view.yawNow), cosY = Math.cos(view.yawNow);
+
     // Keys are read as screen directions (up = away from the camera), then turned into world directions.
     const ix = (held(KEYS.right) ? 1 : 0) - (held(KEYS.left) ? 1 : 0), iz = (held(KEYS.down) ? 1 : 0) - (held(KEYS.up) ? 1 : 0);
-    vel.set(ix * cosY + iz * sinY, 0, iz * cosY - ix * sinY);
     const sprint = k.has('ShiftLeft') || k.has('ShiftRight');
-    if (vel.lengthSq() > 0) { player.goal = null; player.goalTarget = null; player.busy = 0; }
-    else if (player.goal) {
-      vel.subVectors(player.goal, player.pos).setY(0);
-      const stop = player.goalTarget ? targetRadius(player.goalTarget) * 0.55 : 0.12;
-      if (vel.length() <= stop) {
-        const t = player.goalTarget;
-        player.goal = null; player.goalTarget = null; vel.set(0, 0, 0);
-        if (t) useGameStore.getState().interact(t);
+
+    if (inspect) {
+      if (ix !== 0 || iz !== 0) {
+        const panSpeed = (sprint ? 16 : 9) * dt;
+        view.inspectFocus.x = Math.max(-16, Math.min(24, view.inspectFocus.x + (ix * cosY + iz * sinY) * panSpeed));
+        view.inspectFocus.z = Math.max(-22, Math.min(18, view.inspectFocus.z + (iz * cosY - ix * sinY) * panSpeed));
       }
-    }
-    if (player.busy > 0) player.busy -= dt;
-    const moving = vel.lengthSq() > 0;
-    if (moving) {
-      vel.normalize().multiplyScalar((sprint ? SPRINT_SPEED : WALK_SPEED) * dt);
-      player.pos.add(vel);
-      resolveCollisions(player.pos);
-      const target = Math.atan2(vel.x, vel.z);
-      let diff = target - player.heading;
-      diff = Math.atan2(Math.sin(diff), Math.cos(diff));
-      player.heading += diff * Math.min(1, dt * 12);
+    } else {
+      vel.set(ix * cosY + iz * sinY, 0, iz * cosY - ix * sinY);
+      if (vel.lengthSq() > 0) { player.goal = null; player.goalTarget = null; player.busy = 0; }
+      else if (player.goal) {
+        vel.subVectors(player.goal, player.pos).setY(0);
+        const stop = player.goalTarget ? targetRadius(player.goalTarget) * 0.55 : 0.12;
+        if (vel.length() <= stop) {
+          const t = player.goalTarget;
+          player.goal = null; player.goalTarget = null; vel.set(0, 0, 0);
+          if (t) useGameStore.getState().interact(t);
+        }
+      }
+      if (player.busy > 0) player.busy -= dt;
+      const moving = vel.lengthSq() > 0;
+      if (moving) {
+        vel.normalize().multiplyScalar((sprint ? SPRINT_SPEED : WALK_SPEED) * dt);
+        player.pos.add(vel);
+        resolveCollisions(player.pos);
+        const target = Math.atan2(vel.x, vel.z);
+        let diff = target - player.heading;
+        diff = Math.atan2(Math.sin(diff), Math.cos(diff));
+        player.heading += diff * Math.min(1, dt * 12);
+      }
+      const next: CharacterAnim = moving ? (sprint ? 'sprint' : 'walk') : player.busy > 0 ? 'interact-right' : 'idle';
+      if (next !== animRef.current) { animRef.current = next; setAnim(next); }
     }
     if (ref.current) { ref.current.position.copy(player.pos); ref.current.rotation.y = player.heading; }
 
-    const next: CharacterAnim = moving ? (sprint ? 'sprint' : 'walk') : player.busy > 0 ? 'interact-right' : 'idle';
-    if (next !== animRef.current) { animRef.current = next; setAnim(next); }
-
     const s = useGameStore.getState();
-    s.setNearby(nearestTarget(player.pos));
-    // Walking away from what you were working on closes its panel.
-    if (s.selectedPlot !== null && targetPosition({ kind: 'plot', id: s.selectedPlot }, s.plots).distanceTo(player.pos) > 3.2) s.select(null);
-    if (s.talkingTo && targetPosition({ kind: 'npc', id: s.talkingTo }, s.plots).distanceTo(player.pos) > 3.2) s.select(null);
-    if (s.tankOpen && targetPosition({ kind: 'station', id: 'tank' }, s.plots).distanceTo(player.pos) > 3.5) s.select(null);
+    s.setNearby(inspect ? null : nearestTarget(player.pos));
+    if (!inspect) {
+      if (s.selectedPlot !== null && targetPosition({ kind: 'plot', id: s.selectedPlot }, s.plots).distanceTo(player.pos) > 3.2) s.select(null);
+      if (s.talkingTo && targetPosition({ kind: 'npc', id: s.talkingTo }, s.plots).distanceTo(player.pos) > 3.2) s.select(null);
+      if (s.tankOpen && targetPosition({ kind: 'station', id: 'tank' }, s.plots).distanceTo(player.pos) > 3.5) s.select(null);
+    }
 
     // Tall, narrow (portrait phone) screens see less of the farm side to side, so pull back a little.
     const fit = Math.min(1.45, Math.max(1, Math.sqrt(size.height / Math.max(1, size.width))));
     const dist = view.zoom * fit;
-    camGoal.set(player.pos.x + sinY * 11 * dist, 10.5 * dist, player.pos.z + cosY * 11 * dist);
-    camera.position.lerp(camGoal, 1 - Math.exp(-dt * 4));
-    look.set(player.pos.x, 0.8, player.pos.z);
+    const focus = inspect ? view.inspectFocus : player.pos;
+    camGoal.set(focus.x + sinY * 11 * dist, 10.5 * dist, focus.z + cosY * 11 * dist);
+    camera.position.lerp(camGoal, 1 - Math.exp(-dt * (inspect ? 6 : 4)));
+    look.set(focus.x, 0.8, focus.z);
     camera.lookAt(look);
   });
 
@@ -303,7 +319,21 @@ function Worker({ index }: { index: number }) {
     }
     ref.current?.position.copy(st.pos);
   });
-  return <group ref={ref}><Character variant={WORKER_VARIANTS[index % WORKER_VARIANTS.length]} tone={(index + 2) % 5} anim={anim} /></group>;
+  const isWorking = anim !== 'walk';
+  const toolModel: ModelId | null = isProcessing
+    ? (index % 2 === 0 ? 'box' : 'bucket')
+    : (index % 2 === 0 ? 'hoe' : 'shovel');
+
+  return (
+    <group ref={ref}>
+      <Character variant={WORKER_VARIANTS[index % WORKER_VARIANTS.length]} tone={(index + 2) % 5} anim={anim} />
+      {toolModel && (
+        <group position={isWorking ? [0.25, 0.45, 0.25] : [0.2, 0.35, -0.1]} rotation={isWorking ? [0.2, 0, -0.3] : [0.1, 0, 0.2]}>
+          <Model model={toolModel} scale={toolModel === 'hoe' || toolModel === 'shovel' ? 1.5 : 0.8} />
+        </group>
+      )}
+    </group>
+  );
 }
 
 function Workers() {

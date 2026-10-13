@@ -78,7 +78,11 @@ export function checkCampaign(s: GameState): GameState {
     }
     st = completeMission(st, m);
     const next = currentMission(st);
-    st = next ? startMission(st, next) : { ...st, story: { speaker: null, ...CAMPAIGN_END } };
+    if (next) {
+      st = startMission(st, next);
+    } else {
+      st = { ...st, story: { speaker: null, ...CAMPAIGN_END } };
+    }
   }
   return st;
 }

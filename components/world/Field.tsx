@@ -16,6 +16,9 @@ const CLUMPS = [-0.55, 0, 0.55].flatMap(x => [-0.55, 0, 0.55].map(z => [x, z] as
 
 function cropTint(p: PlotState) {
   if (p.issue?.detected) return '#b0744a';
+  if (p.crop === 'soybean') {
+    return p.status === 'ready' ? '#9eb048' : '#327322';
+  }
   if (p.status === 'ready') return '#e9d47a'; // ginger leaves yellow and dry back at maturity
   if (p.health < 55) return '#c9b064';
   if (p.health < 75) return '#dcd59a';

@@ -1,7 +1,7 @@
 'use client';
 import { useState } from 'react';
 import {
-  HAULAGE, buyerOf, contractProductLabel, contractValue, dispatchCosts, eligibleKg, formatPrice, formatValue, gradeLabel, isExport,
+  HAULAGE, buyerOf, contractProductLabel, contractValue, dispatchCosts, eligibleKg, formatPrice, formatValue, getReservedKg, gradeLabel, isExport,
   isUnlocked, lockedReason, money,
 } from '../../game/simulation';
 import type { Contract, Haulage, Shipment } from '../../game/types';
@@ -30,6 +30,7 @@ function DispatchForm({ c }: { c: Contract }) {
   const [haulage, setHaulage] = useState<Haulage>('standard');
   const [insured, setInsured] = useState(false);
   const have = eligibleKg(s, c);
+  const reserved = getReservedKg(s, c.id);
   const costs = dispatchCosts(s, c, haulage, insured);
   const fleetLock = lockedReason(s, 'fleet'), insuranceLock = lockedReason(s, 'cargoInsurance');
   const short = have < c.kg;
@@ -37,6 +38,32 @@ function DispatchForm({ c }: { c: Contract }) {
     <div className="dispatch">
       <div className="bar-label"><span>Stock that meets this contract{isExport(c) ? ' (sealed, clean, ≤12% moisture)' : ''}</span><b className={short ? 'warn' : ''}>{Math.round(have).toLocaleString()} / {c.kg.toLocaleString()} kg</b></div>
       <div className="progress"><i style={{ width: `${Math.min(100, (have / c.kg) * 100)}%` }} /></div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '6px 0', fontSize: '0.85rem' }}>
+        <span>🔒 Reserved for this order: <b>{Math.round(reserved).toLocaleString()} / {c.kg.toLocaleString()} kg</b></span>
+        <div style={{ display: 'flex', gap: '6px' }}>
+          {reserved < c.kg && (
+            <button
+              className="action"
+              style={{ padding: '3px 8px', fontSize: '0.75rem' }}
+              onClick={() => s.reserveContract(c.id)}
+              disabled={have <= reserved}
+              title="Reserve eligible stock specifically for this contract"
+            >
+              Lock stock
+            </button>
+          )}
+          {reserved > 0 && (
+            <button
+              className="action"
+              style={{ padding: '3px 8px', fontSize: '0.75rem' }}
+              onClick={() => s.releaseReservation(c.id)}
+              title="Release reserved stock"
+            >
+              Release
+            </button>
+          )}
+        </div>
+      </div>
       <div className="seg">
         {(Object.keys(HAULAGE) as Haulage[]).map(h => (
           <button key={h} className={h === haulage ? 'on' : ''} disabled={h === 'fleet' && !!fleetLock} onClick={() => setHaulage(h)} title={HAULAGE[h].blurb}>

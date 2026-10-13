@@ -3,7 +3,7 @@ import { create } from 'zustand';
 import { restoreGame, type SaveFile, type SaveMeta } from '../game/save';
 import * as sim from '../game/simulation';
 import { TUTORIAL_START, signalsBetween, skipStep, stepTutorial, type TutorialProgress } from '../game/tutorial';
-import type { AutomationSettings, GameState, Haulage, Packaging, PrepChoices, PrepMethod, SeedTier } from '../game/types';
+import type { AutomationSettings, CropType, GameState, Haulage, Packaging, PrepChoices, PrepMethod, SeedTier } from '../game/types';
 import { playAction } from '../lib/audio';
 
 export type Panel = 'farm' | 'storage' | 'market' | 'trade' | 'business' | 'journal';
@@ -30,7 +30,9 @@ interface UiState {
 interface Actions {
   select: (id: number | null) => void;
   prepare: (id: number, method: PrepMethod) => void;
-  plant: (id: number, seed: SeedTier) => void;
+  plant: (id: number, seed?: SeedTier, crop?: CropType) => void;
+  applyCompost: (id: number) => void;
+  greenManure: (id: number) => void;
   irrigate: (id: number) => void;
   fertilize: (id: number) => void;
   inspect: (id: number) => void;
@@ -54,7 +56,9 @@ interface Actions {
   inspectBatch: (batchId: number) => void;
   pump: () => void;
   hire: () => void;
+  hireCandidate: (candidateId: number) => void;
   dismiss: () => void;
+  dismissWorkerById: (workerId: number) => void;
   upgrade: (id: sim.UpgradeId) => void;
   toggleInsurance: () => void;
   configureAutomation: (patch: Partial<AutomationSettings>) => void;
@@ -77,6 +81,12 @@ interface Actions {
   openProfile: () => void;
   closeProfile: () => void;
   updateProfile: (patch: Partial<sim.PlayerProfile>) => void;
+  buyInput: (item: sim.InputItem, quantity: number) => void;
+  executeBulk: (kind: sim.BulkActionKind, options?: sim.BulkOptions, allowPartial?: boolean) => void;
+  reserveContract: (contractId: number) => void;
+  releaseReservation: (contractId: number) => void;
+  enterSandbox: () => void;
+  respondCoop: (eventId: string, choice: 'accept' | 'decline') => void;
 }
 
 export type Store = GameState & UiState & Actions;
@@ -108,7 +118,9 @@ export const useGameStore = create<Store>((set, get) => {
     tutorial: TUTORIAL_START,
     select: id => set({ selectedPlot: id, talkingTo: null, tankOpen: false }),
     prepare: (id, method) => act('prepare', s => sim.preparePlot(s, id, method), id),
-    plant: (id, seed) => act('plant', s => sim.plantPlot(s, id, seed), id),
+    plant: (id, seed, crop) => act('plant', s => sim.plantPlot(s, id, seed, crop), id),
+    applyCompost: id => act('fertilize', s => sim.applyCompost(s, id), id),
+    greenManure: id => act('harvest', s => sim.greenManurePlot(s, id), id),
     irrigate: id => act('water', s => sim.waterPlot(s, id), id),
     fertilize: id => act('fertilize', s => sim.fertilizePlot(s, id), id),
     inspect: id => act('inspect', s => sim.inspectPlot(s, id), id),
@@ -132,7 +144,9 @@ export const useGameStore = create<Store>((set, get) => {
     inspectBatch: batchId => apply(s => sim.inspectBatch(s, batchId)),
     pump: () => act('pump', sim.pumpWater),
     hire: () => apply(sim.hireWorker),
+    hireCandidate: candidateId => apply(s => sim.hireCandidate(s, candidateId)),
     dismiss: () => apply(sim.dismissWorker),
+    dismissWorkerById: workerId => apply(s => sim.dismissWorkerById(s, workerId)),
     upgrade: id => apply(s => sim.buyUpgrade(s, id)),
     toggleInsurance: () => apply(sim.toggleInsurance),
     configureAutomation: patch => set(s => ({ automation: { ...s.automation, ...patch } })),
@@ -149,6 +163,12 @@ export const useGameStore = create<Store>((set, get) => {
     openProfile: () => set({ customizingProfile: true }),
     closeProfile: () => set({ customizingProfile: false }),
     updateProfile: patch => apply(s => sim.updateProfile(s, patch)),
+    buyInput: (item, quantity) => apply(s => sim.buyInputStock(s, item, quantity)),
+    executeBulk: (kind, options, allowPartial) => apply(s => sim.executeBulk(s, kind, options, allowPartial, s.opSeq)),
+    reserveContract: contractId => apply(s => sim.reserveStock(s, contractId)),
+    releaseReservation: contractId => apply(s => sim.releaseReservation(s, contractId)),
+    enterSandbox: () => apply(sim.enterSandboxMode),
+    respondCoop: (eventId, choice) => apply(s => sim.respondToCooperativeEvent(s, eventId, choice)),
     // Called every frame by the player: only touch the store when the target actually changes,
     // otherwise every subscriber (the whole HUD) would re-render at 60 fps.
     setNearby: t => { if (!sameTarget(get().nearby, t)) set({ nearby: t }); },

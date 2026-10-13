@@ -2,8 +2,8 @@
 import { useState } from 'react';
 import {
   BUYERS, CUT, DEFAULT_PREP, GRIND_MAX_MOISTURE, GRIND_YIELD, PACKAGING, SAFE_MOISTURE, SORT, WASH, WEATHER_INFO,
-  checkSale, dryKgOf, gradeForBatch, gradeLabel, grindCost, isExportReady, money, packagingCost, prepPlan, rackCapacity, rackLoadKg, rackSpaceKg,
-  storedKg, valueOptions, warehouseCapacity,
+  checkSale, dryKgOf, getInputPriceTrend, getInputUnitPrice, gradeForBatch, gradeLabel, grindCost, isExportReady, money, packagingCost, prepPlan, previewPurchase, rackCapacity, rackLoadKg, rackSpaceKg,
+  storedKg, valueOptions, warehouseCapacity, type InputItem,
 } from '../../game/simulation';
 import type { Batch, CutStyle, Packaging, PrepChoices, SortLevel, WashMethod } from '../../game/types';
 import { useGameStore } from '../../stores/gameStore';
@@ -190,5 +190,109 @@ export default function StoragePanel() {
         <BuyerButtons batch={b} />
       </div>
     ))}
+
+    <InputSuppliesShop />
   </>;
 }
+
+const SHOP_ITEMS: { id: InputItem; label: string; icon: string; blurb: string }[] = [
+  { id: 'local', label: 'Farm-saved setts', icon: '🌱', blurb: '20 kg/unit · standard local ginger rhizomes' },
+  { id: 'improved', label: 'Improved variety', icon: '🌾', blurb: '20 kg/unit · higher germination and yield' },
+  { id: 'certified', label: 'Certified disease-free', icon: '⭐', blurb: '20 kg/unit · clean foundation seed stock' },
+  { id: 'fertilizer', label: 'NPK Fertilizer', icon: '🧪', blurb: '50 kg/bag · essential for field soil fertility' },
+  { id: 'soybean', label: 'Soybean seed (TGX-1448-2E)', icon: '🌿', blurb: '25 kg/bag · nitrogen-fixing rotation legume' },
+  { id: 'compost', label: 'Village farmyard compost', icon: '🍂', blurb: '100 kg/bag · restores humus, OM & breaks compaction' },
+];
+
+const BUNDLE_OPTIONS = [1, 5, 10, 25];
+
+function InputSuppliesShop() {
+  const s = useGameStore();
+  const [quantities, setQuantities] = useState<Record<InputItem, number>>({
+    local: 5,
+    improved: 5,
+    certified: 5,
+    fertilizer: 5,
+    soybean: 5,
+    compost: 5,
+  });
+  const trend = getInputPriceTrend(s);
+  const trendLabel = trend === 'rising' ? '▲ Rising (peak season)' : trend === 'falling' ? '▼ Falling (off-peak)' : '■ Stable';
+  const trendClass = trend === 'rising' ? 'warn' : trend === 'falling' ? 'good' : '';
+
+  return (
+    <div className="input-shop" style={{ marginTop: 24, paddingTop: 16, borderTop: '1px solid var(--line)' }}>
+      <div className="batch-head">
+        <h4>Farm Inputs & Stockroom <Tip text="Purchase ginger setts and fertilizer ahead of time. Inputs are stored in the warehouse and automatically used when planting or fertilizing beds, avoiding emergency market price spikes." align="left" /></h4>
+        <small className={trendClass} style={{ fontSize: 11 }}>Price trend: <b>{trendLabel}</b></small>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 10, marginTop: 8 }}>
+        {SHOP_ITEMS.map(item => {
+          const qty = quantities[item.id] ?? 5;
+          const plan = previewPurchase(s, item.id, qty);
+          const currentStock = s.stock?.[item.id] ?? 0;
+          const unitPrice = getInputUnitPrice(s, item.id);
+
+          return (
+            <div key={item.id} className="batch" style={{ margin: 0, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+              <div>
+                <div className="batch-head">
+                  <b>{item.icon} {item.label}</b>
+                  <span className="grade-wrap" style={{ fontSize: 11, color: 'var(--muted)' }}>
+                    In stock: <strong style={{ color: currentStock > 0 ? 'var(--green)' : 'var(--muted)' }}>{currentStock} units</strong>
+                  </span>
+                </div>
+                <small className="muted" style={{ display: 'block', marginBottom: 8 }}>
+                  {item.blurb} · <b>{money(unitPrice)}</b>/unit today
+                </small>
+
+                <div className="station-label" style={{ fontSize: 11, marginBottom: 4 }}>Order size:</div>
+                <div className="seg" style={{ display: 'flex', gap: 4, marginBottom: 10 }}>
+                  {BUNDLE_OPTIONS.map(b => (
+                    <button
+                      key={b}
+                      className={b === qty ? 'on' : ''}
+                      onClick={() => setQuantities({ ...quantities, [item.id]: b })}
+                      style={{ flex: 1, padding: '4px 6px', fontSize: 11 }}
+                    >
+                      {b} {b >= 25 ? '(-10%)' : b >= 10 ? '(-6%)' : b >= 5 ? '(-3%)' : ''}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="preview" style={{ marginBottom: 10, padding: 8, background: '#121913', borderRadius: 8, fontSize: 12 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span>Quantity & weight:</span>
+                    <b>{qty} units ({plan.weightKg} kg)</b>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4 }}>
+                    <span>Total cost:</span>
+                    <b>{money(plan.totalCost)} {plan.discountRate > 0 && <small style={{ color: 'var(--green)' }}>(-{Math.round(plan.discountRate * 100)}%)</small>}</b>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                {plan.locked && <div className="alert" style={{ margin: '4px 0', fontSize: 11 }}>{plan.locked}</div>}
+                {!plan.locked && !plan.fits && <div className="alert" style={{ margin: '4px 0', fontSize: 11 }}>Warehouse full (+{plan.weightKg} kg exceeds free space)</div>}
+                {!plan.locked && plan.fits && !plan.canAfford && <div className="alert" style={{ margin: '4px 0', fontSize: 11 }}>Need {money(plan.totalCost)} (short by {money(plan.totalCost - s.cash)})</div>}
+
+                <button
+                  className="action primary wide"
+                  style={{ width: '100%', marginTop: 6 }}
+                  disabled={!!plan.locked || !plan.fits || !plan.canAfford}
+                  onClick={() => s.buyInput(item.id, qty)}
+                >
+                  <strong>Buy {qty} {qty > 1 ? 'units' : 'unit'}</strong>
+                  <small>{money(plan.totalCost)}</small>
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+

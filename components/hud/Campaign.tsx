@@ -6,7 +6,28 @@ import { useGameStore } from '../../stores/gameStore';
 export function MissionCard() {
   const s = useGameStore();
   const m = currentMission(s);
-  if (!m) return <div className="mission"><b>Farm to Fortune complete</b><br />Keep building export lots for London Spice Co.</div>;
+  if (!m) {
+    return (
+      <div className="mission campaign">
+        <span className="mission-step">Agribusiness Milestone</span>
+        <b>Farm to Fortune Complete! 🏆</b>
+        <p>Your Kafanchan farm is an established international exporter.</p>
+        {!s.sandboxMode ? (
+          <button
+            className="action primary"
+            onClick={s.enterSandbox}
+            style={{ marginTop: '8px', width: '100%', fontSize: '12px' }}
+          >
+            🌟 Enter Agribusiness Sandbox
+          </button>
+        ) : (
+          <small style={{ display: 'block', marginTop: '6px', color: '#93c5fd' }}>
+            🌟 Sandbox Mode Active: Endless Agribusiness
+          </small>
+        )}
+      </div>
+    );
+  }
   const n = s.missions.indexOf(m) + 1;
   const showBar = m.target > 1;
   return (

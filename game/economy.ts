@@ -1,18 +1,21 @@
 import {
   BUYERS, CUT, DRYING_COST_PER_KG, DRYING_RACK_KG, ENERGY, FACTORY_SEALED_DISCOUNT, GRIND_COST_PER_KG, GRIND_FUEL_PER_KG, GRIND_MAX_MOISTURE, GRIND_YIELD,
-  HIRE_COST, IRRIGATION_REPAIR_COST, LITRES_PER_FUEL_LITRE, MAX_LAND_LEASES, PACKAGING, SAFE_MOISTURE, SORT, UPGRADES, WASH, WATER_PER_PLOT, WORKER_ENERGY, type UpgradeId,
+  HIRE_COST, IRRIGATION_REPAIR_COST, LITRES_PER_FUEL_LITRE, MAX_LAND_LEASES, PACKAGING, SAFE_MOISTURE, SORT, UPGRADES, WAGE_PER_DAY, WASH, WATER_PER_PLOT, WORKER_ENERGY, type UpgradeId,
 } from './config';
 import { lockedReason, maxWorkers, type UnlockId } from './levels';
 import { checkSale, gradeForBatch, gradeLabel, inspectBatchReport } from './quality';
 import { addXp, blocked, clamp, earn, fail, fuelPrice, leasedPlots, log, money, spend, tankCapacity } from './state';
-import type { Batch, DryingJob, GameState, Packaging, PrepChoices } from './types';
+import type { Batch, DryingJob, GameState, Packaging, PrepChoices, WorkerProfile } from './types';
 import { autoIrrigate } from './irrigation';
+import { ROLE_DETAILS } from './workers';
+import { recordLedgerEntry } from './ledger';
 
-const PRODUCT_NAME = { fresh: 'fresh ginger', dried: 'dried ginger', powder: 'ginger powder' } as const;
+const PRODUCT_NAME = { fresh: 'fresh ginger', dried: 'dried ginger', powder: 'ginger powder', soybean: 'soybean grain' } as const;
 
 export function sellBatch(s: GameState, batchId: number, buyerId: string): GameState {
   const batch = s.batches.find(b => b.id === batchId), buyer = BUYERS.find(b => b.id === buyerId);
   if (!batch || !buyer) return fail(s, 'That sale is no longer available.');
+  if (batch.reservedFor) return fail(s, 'This batch is reserved for an active contract. Release the reservation before selling.');
   const check = checkSale(s, batch, buyer);
   if (!check.ok) {
     const rejected = check.reason.startsWith('Rejected');
@@ -21,7 +24,15 @@ export function sellBatch(s: GameState, batchId: number, buyerId: string): GameS
   }
   const grade = gradeForBatch(batch), label = gradeLabel(grade);
   const stats = batch.product === 'fresh' ? { ...s.stats, freshSoldKg: s.stats.freshSoldKg + batch.kg } : s.stats;
-  const next = earn({ ...s, stats, batches: s.batches.filter(b => b.id !== batchId) }, check.revenue);
+  let next = earn({ ...s, stats, batches: s.batches.filter(b => b.id !== batchId) }, check.revenue);
+  next = recordLedgerEntry(next, {
+    id: `sale-batch-${batch.id}-${s.day}`,
+    day: s.day,
+    category: 'domesticSales',
+    amount: check.revenue,
+    referenceId: batch.id,
+    description: `Sold ${Math.round(batch.kg)} kg ${label} ${PRODUCT_NAME[batch.product]} to ${buyer.name}`,
+  });
   const logged = log(next, { text: `Sold ${Math.round(batch.kg)} kg ${label} ${PRODUCT_NAME[batch.product]} to ${buyer.name} for ${money(check.revenue)}.`, severity: 'good' });
   const rep = { ...logged, reputation: s.reputation + (grade === 'C' ? 0 : grade === 'B' ? 1 : 2), toast: `${buyer.name} paid ${money(check.revenue)} for ${label} ${PRODUCT_NAME[batch.product]}.` };
   return addXp(rep, batch.product === 'fresh' ? 30 : 60);
@@ -61,10 +72,20 @@ export function startProcessing(s: GameState, batchId: number, choices: PrepChoi
   const job: DryingJob = { id: s.nextId, freshKg: plan.keptKg, dryMatterKg: plan.dryMatterKg, moisture: batch.moisture, quality: plan.quality, days: 0, covered: false, rate: plan.rate, soiled: plan.soiled };
   const rest = batch.kg - kg;
   const batches = rest > 1 ? s.batches.map(b => (b.id === batchId ? { ...b, kg: rest } : b)) : s.batches.filter(b => b.id !== batchId);
-  const next: GameState = {
+  let next: GameState = {
     ...spend(s, plan.cost, ENERGY.dry), water: s.water - plan.litres, nextId: s.nextId + 1, batches, dryingJobs: [...s.dryingJobs, job],
     stats: { ...s.stats, processedKg: s.stats.processedKg + kg },
   };
+  if (plan.cost > 0) {
+    next = recordLedgerEntry(next, {
+      id: `process-job-${job.id}`,
+      day: s.day,
+      category: 'processingPackaging',
+      amount: plan.cost,
+      referenceId: job.id,
+      description: `Washing, sorting & slicing fresh ginger into rack #${job.id}`,
+    });
+  }
   const culled = kg - plan.keptKg;
   return { ...next, toast: `${WASH[choices.wash].label}, ${SORT[choices.sort].label.toLowerCase()}${culled > 1 ? ` (${Math.round(culled)} kg culled)` : ''}, ${CUT[choices.cut].label.toLowerCase()}: ${Math.round(plan.keptKg)} kg on the racks for ${money(plan.cost)}.${rest > 1 ? ` ${Math.round(rest)} kg left in store.` : ''}` };
 }
@@ -95,10 +116,20 @@ export function finishDrying(s: GameState, jobId: number, packaging: Packaging =
   const batch: Batch = { id: s.nextId, product: 'dried', kg, quality: job.quality, moisture: job.moisture, createdDay: s.day, packaging, soiled: job.soiled };
   const report = inspectBatchReport(batch, s.day);
   const damp = job.moisture > SAFE_MOISTURE;
-  const next: GameState = {
+  let next: GameState = {
     ...spend(s, cost, ENERGY.bag), nextId: s.nextId + 1, dryingJobs: s.dryingJobs.filter(j => j.id !== jobId), batches: [...s.batches, batch], lastInspection: report,
     stats: damp ? s.stats : { ...s.stats, safeDriedKg: s.stats.safeDriedKg + kg },
   };
+  if (cost > 0) {
+    next = recordLedgerEntry(next, {
+      id: `bag-batch-${batch.id}`,
+      day: s.day,
+      category: 'processingPackaging',
+      amount: cost,
+      referenceId: batch.id,
+      description: `Bagging dried batch into ${PACKAGING[packaging].label}`,
+    });
+  }
   const logged = log(next, { text: `Bagged ${Math.round(kg)} kg dried ginger in ${PACKAGING[packaging].label.toLowerCase()} at ${job.moisture.toFixed(1)}% moisture (${gradeLabel(report.grade)}).`, severity: damp ? 'warning' : 'good' });
   return addXp({ ...logged, toast: damp ? `Bagged too early: ${job.moisture.toFixed(1)}% moisture.` : `Bagged ${Math.round(kg)} kg ${gradeLabel(report.grade)} dried ginger.` }, 35);
 }
@@ -113,6 +144,7 @@ export function grindBatch(s: GameState, batchId: number, packaging: Packaging =
   if (!s.upgrades.mill) return fail(s, 'You need a hammer mill to make powder. Buy one in Business.');
   const b = s.batches.find(x => x.id === batchId);
   if (!b || b.product !== 'dried') return fail(s, 'Only dried ginger can be milled.');
+  if (b.reservedFor) return fail(s, 'This batch is reserved for an active contract and cannot be milled.');
   const cost = grindCost(s, b, packaging);
   const why = blocked(s, { energy: ENERGY.grind, cash: cost });
   if (why) return fail(s, why);
@@ -123,10 +155,20 @@ export function grindBatch(s: GameState, batchId: number, packaging: Packaging =
   };
   const report = inspectBatchReport(powder, s.day);
   if (caking) report.warnings.unshift(`Ginger went into the mill at ${b.moisture.toFixed(1)}% moisture: the powder caked and clumped.`);
-  const next: GameState = {
+  let next: GameState = {
     ...spend(s, cost, ENERGY.grind), nextId: s.nextId + 1, batches: [...s.batches.filter(x => x.id !== batchId), powder], lastInspection: report,
     stats: { ...s.stats, powderKg: s.stats.powderKg + powder.kg },
   };
+  if (cost > 0) {
+    next = recordLedgerEntry(next, {
+      id: `mill-batch-${powder.id}`,
+      day: s.day,
+      category: 'processingPackaging',
+      amount: cost,
+      referenceId: powder.id,
+      description: `Milling batch #${batchId} into powder`,
+    });
+  }
   const logged = log(next, { text: `Milled ${Math.round(powder.kg)} kg ginger powder (${gradeLabel(report.grade)}) for ${money(cost)}.`, severity: caking ? 'warning' : 'good' });
   return addXp({ ...logged, toast: `Milled ${Math.round(powder.kg)} kg ${gradeLabel(report.grade)} ginger powder.` }, 50);
 }
@@ -142,22 +184,138 @@ export function pumpWater(s: GameState): GameState {
   const cost = Math.round(Math.ceil(litres / LITRES_PER_FUEL_LITRE) * fuelPrice(s));
   const why = blocked(s, { energy: ENERGY.pump, cash: cost });
   if (why) return fail(s, why);
-  return { ...spend(s, cost, ENERGY.pump), water: tankCapacity(s), toast: `Borehole pump filled the tank: ${litres.toLocaleString()} L for ${money(cost)} in fuel.` };
+  let nextState = { ...spend(s, cost, ENERGY.pump), water: tankCapacity(s), toast: `Borehole pump filled the tank: ${litres.toLocaleString()} L for ${money(cost)} in fuel.` };
+  if (cost > 0) {
+    nextState = recordLedgerEntry(nextState, {
+      id: `pump-water-${s.day}-${s.nextId}`,
+      day: s.day,
+      category: 'fuelUtilities',
+      amount: cost,
+      description: `Fuel for borehole pump (${litres.toLocaleString()} L pumped)`,
+    });
+  }
+  return nextState;
+}
+
+export function hireCandidate(s: GameState, candidateId: number): GameState {
+  if (s.workers >= maxWorkers(s.level)) return fail(s, `You can manage ${maxWorkers(s.level)} workers at Level ${s.level}. Grow the business to take on more.`);
+  const cand = (s.candidates ?? []).find(c => c.id === candidateId);
+  if (!cand) return fail(s, 'That specialist candidate is no longer available.');
+  const why = blocked(s, { cash: cand.hireCost });
+  if (why) return fail(s, why);
+
+  const profile: WorkerProfile = {
+    id: s.nextId,
+    name: cand.name,
+    role: cand.role,
+    level: cand.level,
+    xp: 0,
+    dailyWage: cand.dailyWage,
+    daysEmployed: 0,
+    trait: cand.trait,
+    morale: 100,
+  };
+
+  const crew = [...(s.crew ?? []), profile];
+  const candidates = (s.candidates ?? []).filter(c => c.id !== candidateId);
+
+  let fieldWorkers = s.automation.fieldWorkers ?? 0;
+  let processingWorkers = s.automation.processingWorkers ?? 0;
+  if (fieldWorkers === 0 && processingWorkers === 0) fieldWorkers = 1;
+  else if (cand.role === 'masterProcessor') processingWorkers++;
+  else fieldWorkers++;
+
+  const spent = spend(s, cand.hireCost);
+  let hiredState: GameState = {
+    ...spent,
+    nextId: s.nextId + 1,
+    workers: crew.length,
+    crew,
+    candidates,
+    automation: { ...s.automation, fieldWorkers, processingWorkers },
+    toast: `Hired ${cand.name} (${ROLE_DETAILS[cand.role].title})! +${WORKER_ENERGY} energy from tomorrow.`,
+  };
+  hiredState = recordLedgerEntry(hiredState, {
+    id: `hire-candidate-${cand.id}`,
+    day: s.day,
+    category: 'wages',
+    amount: cand.hireCost,
+    referenceId: cand.id,
+    description: `Recruitment fee for ${cand.name} (${ROLE_DETAILS[cand.role].title})`,
+  });
+  return hiredState;
+}
+
+export function dismissWorkerById(s: GameState, workerId: number): GameState {
+  if (!s.workers || !(s.crew ?? []).some(w => w.id === workerId)) return s;
+  const dismissed = (s.crew ?? []).find(w => w.id === workerId);
+  const crew = (s.crew ?? []).filter(w => w.id !== workerId);
+  const newCount = crew.length;
+
+  let fieldWorkers = s.automation.fieldWorkers ?? 0;
+  let processingWorkers = s.automation.processingWorkers ?? 0;
+  while (fieldWorkers + processingWorkers > newCount && fieldWorkers + processingWorkers > 0) {
+    if (processingWorkers > 0) processingWorkers--;
+    else if (fieldWorkers > 0) fieldWorkers--;
+  }
+
+  return {
+    ...s,
+    workers: newCount,
+    crew,
+    automation: { ...s.automation, fieldWorkers, processingWorkers },
+    reputation: Math.max(0, s.reputation - 1),
+    toast: `${dismissed?.name ?? 'Worker'} let go. Lower daily payroll, less labour capacity.`,
+  };
 }
 
 export function hireWorker(s: GameState): GameState {
   if (s.workers >= maxWorkers(s.level)) return fail(s, `You can manage ${maxWorkers(s.level)} workers at Level ${s.level}. Grow the business to take on more.`);
   const why = blocked(s, { cash: HIRE_COST });
   if (why) return fail(s, why);
+
+  const fallbackWorker: WorkerProfile = {
+    id: s.nextId,
+    name: 'Yakubu Danladi',
+    role: 'general',
+    level: 'rookie',
+    xp: 0,
+    dailyWage: WAGE_PER_DAY,
+    daysEmployed: 0,
+    trait: 'carefulHandler',
+    morale: 100,
+  };
+
+  const crew = [...(s.crew ?? []), fallbackWorker];
   let fieldWorkers = s.automation.fieldWorkers ?? 0;
   let processingWorkers = s.automation.processingWorkers ?? 0;
   if (fieldWorkers === 0 && processingWorkers === 0) fieldWorkers = 1;
   else if (processingWorkers === 0 && s.workers === 1) processingWorkers = 1;
-  return { ...spend(s, HIRE_COST), workers: s.workers + 1, automation: { ...s.automation, fieldWorkers, processingWorkers }, toast: `Worker hired: +${WORKER_ENERGY} energy from tomorrow. Wages are paid every evening.` };
+
+  let hiredState: GameState = {
+    ...spend(s, HIRE_COST),
+    nextId: s.nextId + 1,
+    workers: crew.length,
+    crew,
+    automation: { ...s.automation, fieldWorkers, processingWorkers },
+    toast: `Worker hired: +${WORKER_ENERGY} energy from tomorrow. Wages are paid every evening.`,
+  };
+  hiredState = recordLedgerEntry(hiredState, {
+    id: `hire-worker-${fallbackWorker.id}`,
+    day: s.day,
+    category: 'wages',
+    amount: HIRE_COST,
+    referenceId: fallbackWorker.id,
+    description: `Recruitment fee for general labourer ${fallbackWorker.name}`,
+  });
+  return hiredState;
 }
 
 export function dismissWorker(s: GameState): GameState {
   if (!s.workers) return s;
+  if (s.crew && s.crew.length > 0) {
+    return dismissWorkerById(s, s.crew[s.crew.length - 1].id);
+  }
   const newCount = s.workers - 1;
   let fieldWorkers = s.automation.fieldWorkers ?? 0;
   let processingWorkers = s.automation.processingWorkers ?? 0;
@@ -165,7 +323,7 @@ export function dismissWorker(s: GameState): GameState {
     if (processingWorkers > 0) processingWorkers--;
     else if (fieldWorkers > 0) fieldWorkers--;
   }
-  return { ...s, workers: newCount, automation: { ...s.automation, fieldWorkers, processingWorkers }, reputation: Math.max(0, s.reputation - 1), toast: 'Worker let go. Lower wages, less labour.' };
+  return { ...s, workers: newCount, crew: [], automation: { ...s.automation, fieldWorkers, processingWorkers }, reputation: Math.max(0, s.reputation - 1), toast: 'Worker let go. Lower wages, less labour.' };
 }
 
 /** Which level unlock (if any) gates each upgrade. */
@@ -202,6 +360,14 @@ export function buyUpgrade(s: GameState, id: UpgradeId): GameState {
   const why = blocked(s, { cash: u.cost });
   if (why) return fail(s, why);
   let next = applyUpgrade(spend(s, u.cost), id);
+  next = recordLedgerEntry(next, {
+    id: `buy-upgrade-${id}-${s.day}`,
+    day: s.day,
+    category: 'capitalExpenditure',
+    amount: u.cost,
+    referenceId: id,
+    description: `Invested in ${u.label}`,
+  });
   const irrigation = id === 'irrigation' ? autoIrrigate(next) : { state: next, irrigated: 0 };
   next = irrigation.state;
   const installLine = irrigation.irrigated
@@ -215,7 +381,14 @@ export function repairIrrigation(s: GameState): GameState {
   if (!s.upgrades.irrigation) return fail(s, 'Install drip irrigation before servicing it.');
   if (s.irrigationCondition >= 100) return fail(s, 'Drip lines are already in good condition.');
   if (s.cash < IRRIGATION_REPAIR_COST) return fail(s, `You need ${money(IRRIGATION_REPAIR_COST)} to service the drip lines.`);
-  const next = spend(s, IRRIGATION_REPAIR_COST);
+  let next = spend(s, IRRIGATION_REPAIR_COST);
+  next = recordLedgerEntry(next, {
+    id: `service-irrigation-${s.day}`,
+    day: s.day,
+    category: 'equipmentMaintenance',
+    amount: IRRIGATION_REPAIR_COST,
+    description: `Serviced drip irrigation emitters`,
+  });
   return { ...next, irrigationCondition: 100, toast: `Drip lines serviced for ${money(IRRIGATION_REPAIR_COST)}. Automatic watering is ready.` };
 }
 
