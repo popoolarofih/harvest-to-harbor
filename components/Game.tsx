@@ -113,40 +113,11 @@ function CameraControls() {
         </button>
       </div>
       {inspecting && (
-        <div
-          style={{
-            position: 'absolute',
-            bottom: '78px',
-            left: '50%',
-            transform: 'translateX(-50%)',
-            background: 'rgba(255, 255, 255, 0.98)',
-            border: '2px solid var(--green)',
-            borderRadius: '24px',
-            padding: '8px 20px',
-            color: 'var(--green-dark)',
-            fontSize: '13.5px',
-            fontWeight: 600,
-            display: 'flex',
-            alignItems: 'center',
-            gap: '14px',
-            boxShadow: 'var(--card-shadow)',
-            zIndex: 40,
-            pointerEvents: 'auto',
-          }}
-        >
+        <div className="inspect-banner">
           <span>🔭 <strong>Inspection</strong>: WASD pan · Drag orbit · Scroll zoom</span>
           <button
             onClick={() => { setCameraMode('follow'); setInspecting(false); }}
-            style={{
-              background: 'var(--green)',
-              color: '#fff',
-              border: 'none',
-              borderRadius: '12px',
-              padding: '6px 14px',
-              fontSize: '12.5px',
-              cursor: 'pointer',
-              fontWeight: 700,
-            }}
+            className="inspect-exit-btn"
           >
             Exit (ESC)
           </button>
@@ -163,6 +134,13 @@ function Hud() {
   const [menu, setMenu] = useState(false);
   const [confirmNew, setConfirmNew] = useState(false);
   const [bulkModal, setBulkModal] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.innerWidth <= 768) {
+      setCompact(true);
+    }
+  }, []);
+
   useEffect(() => { if (!s.toast) return; const t = setTimeout(s.clearToast, 3600); return () => clearTimeout(t); }, [s.toast, s.clearToast]);
   // After the truck pulls out of the gate, follow the shipment on the map.
   const shipAt = s.fx?.kind === 'ship' ? s.fx.at : null, openPanel = s.openPanel;
@@ -181,7 +159,7 @@ function Hud() {
       <header className="topbar">
         <div className="brand brand-btn" role="button" tabIndex={0} onClick={s.openProfile} title="Personalize your farm and farmer">
           <small>{s.profile.emblem} {s.profile.farmName}</small>
-          HARVEST TO HARBOR
+          <span className="brand-text">HARVEST TO HARBOR</span>
         </div>
         <div className="stats">
           <div className="stat"><span>Cash <Tip text={TIPS.cash} /></span><b>{money(s.cash)}</b></div>
@@ -200,7 +178,7 @@ function Hud() {
 
       <section className={`side ${compact ? 'compact' : ''} ${tutorialOn ? 'with-tutorial' : ''}`}>
         <button className="collapse" onClick={() => setCompact(!compact)} aria-label={compact ? 'Expand panel' : 'Collapse panel'}>{compact ? '▸' : '▾'}</button>
-        <div className="eyebrow">Season 01 · {s.profile.farmerName} · Kafanchan</div>
+        <div className="eyebrow" onClick={() => setCompact(!compact)} style={{ cursor: 'pointer' }}>Season 01 · {s.profile.farmerName} · Kafanchan</div>
         <XpBar />
         <TutorialCard />
         <MissionCard />
@@ -219,33 +197,35 @@ function Hud() {
         <div className="weather"><span>FRESH</span><b>{money(s.market.fresh)}/kg</b><span>DRIED</span><b>{money(s.market.dried)}/kg</b></div>
       </section>
 
-      <section className="actions">
-        {s.selectedPlot !== null ? <PlotPanel /> : s.tankOpen ? <TankCard /> : s.talkingTo ? <NpcCard /> : (
-          <div className="card">
-            <div className="eyebrow">Operations</div>
-            <h3>Run the farm</h3>
-            <p className="muted small">
-              <span className="hint-mouse"><kbd>WASD</kbd> Move · <kbd>E</kbd> Interact · <kbd>Q</kbd>/<kbd>R</kbd> Turn · Scroll Zoom</span>
-              <span className="hint-touch">Tap to walk & interact · Pinch zoom</span>
-            </p>
-            <div className="action-grid">
-              <button className="action primary" data-tut="end-day" onClick={s.advance}><strong>🌙 End day</strong><small>{nightly > 0 ? `${money(nightly)} nightly costs` : 'Advance day'}</small></button>
-              <button className="action" onClick={s.pump} disabled={s.water >= tankCapacity(s)}><strong>⛽ Pump borehole</strong><small>Fill water tank</small></button>
-              <button className="action" onClick={() => setPanel('storage')}><strong>📦 Storage</strong><small>{Math.round(freshKg)} kg fresh · {Math.round(driedKg)} kg dried</small></button>
-              <button className="action" onClick={() => setPanel('business')}><strong>🏗 Business</strong><small>Workers, loans & upgrades</small></button>
-              <button className="action" onClick={() => setBulkModal(true)}><strong>🚜 Bulk operations</strong><small>Field automation</small></button>
+      <aside className="hud-right">
+        <section className="actions">
+          {s.selectedPlot !== null ? <PlotPanel /> : s.tankOpen ? <TankCard /> : s.talkingTo ? <NpcCard /> : (
+            <div className="card">
+              <div className="eyebrow">Operations</div>
+              <h3>Run the farm</h3>
+              <p className="muted small">
+                <span className="hint-mouse"><kbd>WASD</kbd> Move · <kbd>E</kbd> Interact · <kbd>Q</kbd>/<kbd>R</kbd> Turn · Scroll Zoom</span>
+                <span className="hint-touch">Tap to walk & interact · Pinch zoom</span>
+              </p>
+              <div className="action-grid">
+                <button className="action primary" data-tut="end-day" onClick={s.advance}><strong>🌙 End day</strong><small>{nightly > 0 ? `${money(nightly)} nightly costs` : 'Advance day'}</small></button>
+                <button className="action" onClick={s.pump} disabled={s.water >= tankCapacity(s)}><strong>⛽ Pump borehole</strong><small>Fill water tank</small></button>
+                <button className="action" onClick={() => setPanel('storage')}><strong>📦 Storage</strong><small>{Math.round(freshKg)} kg fresh · {Math.round(driedKg)} kg dried</small></button>
+                <button className="action" onClick={() => setPanel('business')}><strong>🏗 Business</strong><small>Workers, loans & upgrades</small></button>
+                <button className="action" onClick={() => setBulkModal(true)}><strong>🚜 Bulk operations</strong><small>Field automation</small></button>
+              </div>
+              {ready.length > 0 && <div className="alert good">Ready to harvest: {ready.map(plotName).join(', ')}</div>}
             </div>
-            {ready.length > 0 && <div className="alert good">Ready to harvest: {ready.map(plotName).join(', ')}</div>}
-          </div>
-        )}
-      </section>
+          )}
+        </section>
 
-      <div className="mini-stats">
-        <div><span>Planted</span><b>{crops.length}/{s.plots.length}</b></div>
-        <div><span>Fresh</span><b>{Math.round(freshKg)} kg</b></div>
-        <div><span>Drying</span><b>{s.dryingJobs.length} racks</b></div>
-        <div><span>Workers</span><b>{s.workers}</b></div>
-      </div>
+        <div className="mini-stats">
+          <div><span>Planted</span><b>{crops.length}/{s.plots.length}</b></div>
+          <div><span>Fresh</span><b>{Math.round(freshKg)} kg</b></div>
+          <div><span>Drying</span><b>{s.dryingJobs.length} racks</b></div>
+          <div><span>Workers</span><b>{s.workers}</b></div>
+        </div>
+      </aside>
 
       <nav className="bottom">
         {TABS.map(([id, label]) => <button key={id} className={`tab ${panel === id ? 'active' : ''}`} data-tut={id === 'storage' ? 'storage-tab' : undefined} onClick={() => setPanel(id)}>{label}</button>)}
