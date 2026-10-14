@@ -42,7 +42,7 @@ export default function BulkActionsModal({ onClose }: BulkActionsModalProps) {
         <div className="eyebrow">Operations · Field Automation</div>
         <h2>🚜 Bulk Field Operations</h2>
         <p className="muted small">
-          Batch-process multiple beds at once. Every operation strictly enforces real costs, energy, crop eligibility, and equipment rules.
+          Batch-automate operations across multiple field beds.
         </p>
 
         <div className="bulk-tabs">

@@ -18,7 +18,7 @@ const TIPS = {
 };
 export const GRADE_TIP = `Grade sets the price: ${Object.entries(GRADE_MULT).map(([g, m]) => `${g} ×${m}`).join(', ')} of market. Quality, moisture, soil and packaging decide it.`;
 
-const TERRAIN = ['Upland: drains fast, dries out', 'Gentle slope', 'Lower field', 'Stream bottom: fertile but floods'];
+const TERRAIN = ['Upland terrain', 'Gentle slope', 'Lower field', 'Stream bottom'];
 
 function Bar({ label, value, warn, tip }: { label: string; value: number; warn?: boolean; tip?: string }) {
   return (
@@ -79,12 +79,12 @@ export default function PlotPanel() {
 
       {(p.diseasePressure?.rot ?? 0) > 15 && (
         <div className="alert danger">
-          🦠 Soilborne rot pathogen pressure: {Math.round(p.diseasePressure?.rot ?? 0)}%. High risk of Pythium soft rot.
+          🦠 Rot pathogen pressure: {Math.round(p.diseasePressure?.rot ?? 0)}%. Risk of Pythium soft rot.
         </div>
       )}
 
       {p.issue?.detected && <div className="alert danger">{TREATMENTS[p.issue.kind].name}: severity {Math.round(p.issue.severity)}%</div>}
-      {cropped && !p.issue?.detected && p.health < 85 && <div className="alert">Health is slipping. Inspect to find out why.</div>}
+      {cropped && !p.issue?.detected && p.health < 85 && <div className="alert">Health is slipping. Inspect to identify issue.</div>}
 
       {rotationAdvice.warning && p.status === 'prepared' && (
         <div className="alert danger">
@@ -104,7 +104,7 @@ export default function PlotPanel() {
 
       {p.status === 'prepared' && (
         <>
-          <div style={{ margin: '10px 0 4px', fontSize: '11px', color: 'var(--muted)', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+          <div style={{ margin: '10px 0 4px', fontSize: '12px', color: 'var(--green2)', letterSpacing: '0.1em', textTransform: 'uppercase', fontWeight: 700 }}>
             Choose Crop to Plant
           </div>
           <div className="choices">
@@ -115,9 +115,9 @@ export default function PlotPanel() {
               onClick={() => s.plant(p.id, undefined, 'soybean')}
               disabled={(s.cash < soySeedCost && !hasSoyStock) || s.energy < ENERGY.plant}
             >
-              <strong>🌱 Soybean (TGX-1448-2E) · Rotation Crop {consecutiveGinger > 0 ? '⭐ Recommended' : ''}</strong>
+              <strong>🌱 Soybean (TGX-1448-2E) · Rotation {consecutiveGinger > 0 ? '⭐ Recommended' : ''}</strong>
               <span>{hasSoyStock ? 'From stock (free)' : money(SOYBEAN_SEED_COST)} · 30-day quick cycle</span>
-              <small>Fixes biological nitrogen (+20), adds +10% organic matter, suppresses ginger soft rot pathogens by 50%.</small>
+              <small>Fixes nitrogen (+20), adds +10% OM, cuts rot risk by 50%.</small>
             </button>
 
             {/* Ginger seed options */}
@@ -135,7 +135,7 @@ export default function PlotPanel() {
                 </strong>
                 <span>{money(SEEDS[t].cost)} · {Math.round(SEEDS[t].germination * 100)}% emergence</span>
                 <small>
-                  {consecutiveGinger > 0 ? `⚠️ Monoculture warning: +${consecutiveGinger * 20}% rot risk! ` : ''}
+                  {consecutiveGinger > 0 ? `⚠️ Monoculture: +${consecutiveGinger * 20}% rot risk! ` : ''}
                   {SEEDS[t].blurb}
                 </small>
               </button>
@@ -153,7 +153,7 @@ export default function PlotPanel() {
         )}
         {p.status !== 'empty' && (
           <button className="action" onClick={() => s.fertilize(p.id)} disabled={s.cash < FERTILIZER_COST}>
-            <strong>🌱 N-P-K</strong><small>{money(FERTILIZER_COST)}{isWet(s.weather) ? ' · rain leaches' : ''}</small>
+            <strong>🌱 N-P-K</strong><small>{money(FERTILIZER_COST)}{isWet(s.weather) ? ' · leaches in rain' : ''}</small>
           </button>
         )}
         {(p.status === 'empty' || p.status === 'prepared') && (
@@ -168,7 +168,7 @@ export default function PlotPanel() {
         )}
         {cropped && (
           <button className="action" onClick={() => s.inspect(p.id)} disabled={s.energy < ENERGY.inspect}>
-            <strong>🔍 Inspect</strong><small>Find hidden pests/rot</small>
+            <strong>🔍 Inspect</strong><small>Check pests & rot</small>
           </button>
         )}
         {p.issue?.detected && (
@@ -197,12 +197,12 @@ export default function PlotPanel() {
               </div>
               <small className="muted">
                 {isSoy
-                  ? 'Grain harvest: sell to feed mill aggregator. Fixes +20 soil nitrogen, adds +10% OM, cuts rot pathogens by 50%.'
+                  ? 'Sell grain to aggregator or incorporate biomass as green manure.'
                   : p.status === 'growing'
-                    ? 'Early harvest: smaller rhizomes, lower quality. Cash sooner and no more weather risk.'
+                    ? 'Early harvest: lower yield, zero weather risk.'
                     : p.daysReady < 4
-                      ? 'Waiting adds ~3% yield a day for a few days, but rot and storm risk keep rising.'
-                      : 'Left too long: rhizomes are turning fibrous and rot risk is climbing.'}
+                      ? 'Peak maturity: optimal yield and grade.'
+                      : 'Over-mature: harvest soon.'}
               </small>
               <div style={{ display: 'grid', gridTemplateColumns: isSoy ? '1fr 1fr' : '1fr', gap: '8px' }}>
                 <button

@@ -36,15 +36,15 @@ function DispatchForm({ c }: { c: Contract }) {
   const short = have < c.kg;
   return (
     <div className="dispatch">
-      <div className="bar-label"><span>Stock that meets this contract{isExport(c) ? ' (sealed, clean, ≤12% moisture)' : ''}</span><b className={short ? 'warn' : ''}>{Math.round(have).toLocaleString()} / {c.kg.toLocaleString()} kg</b></div>
+      <div className="bar-label"><span>Eligible stock{isExport(c) ? ' (export-ready)' : ''}</span><b className={short ? 'warn' : ''}>{Math.round(have).toLocaleString()} / {c.kg.toLocaleString()} kg</b></div>
       <div className="progress"><i style={{ width: `${Math.min(100, (have / c.kg) * 100)}%` }} /></div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '6px 0', fontSize: '0.85rem' }}>
-        <span>🔒 Reserved for this order: <b>{Math.round(reserved).toLocaleString()} / {c.kg.toLocaleString()} kg</b></span>
-        <div style={{ display: 'flex', gap: '6px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '8px 0', fontSize: '13.5px' }}>
+        <span>🔒 Reserved: <b>{Math.round(reserved).toLocaleString()} / {c.kg.toLocaleString()} kg</b></span>
+        <div style={{ display: 'flex', gap: '8px' }}>
           {reserved < c.kg && (
             <button
               className="action"
-              style={{ padding: '3px 8px', fontSize: '0.75rem' }}
+              style={{ padding: '6px 12px', fontSize: '12.5px', fontWeight: 600 }}
               onClick={() => s.reserveContract(c.id)}
               disabled={have <= reserved}
               title="Reserve eligible stock specifically for this contract"
@@ -55,7 +55,7 @@ function DispatchForm({ c }: { c: Contract }) {
           {reserved > 0 && (
             <button
               className="action"
-              style={{ padding: '3px 8px', fontSize: '0.75rem' }}
+              style={{ padding: '6px 12px', fontSize: '12.5px', fontWeight: 600 }}
               onClick={() => s.releaseReservation(c.id)}
               title="Release reserved stock"
             >

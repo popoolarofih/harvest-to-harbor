@@ -25,7 +25,7 @@ export function TankCard() {
       <div className="eyebrow">Water tank & borehole</div>
       <h3>{s.water.toLocaleString()} / {cap.toLocaleString()} L</h3>
       <div className="progress"><i style={{ width: `${(s.water / cap) * 100}%`, background: '#6fb7e8' }} /></div>
-      <p className="muted small">Each bed takes 400 L to water. Rain tops up the tank for free; the borehole pump burns diesel.</p>
+      <p className="muted small">400 L per bed. Rain refills tank free; pump burns diesel.</p>
       <div className="action-grid">
         <button className="action primary" onClick={s.pump} disabled={missing <= 0 || s.cash < cost}><strong>⛽ Run the pump</strong><small>{missing > 0 ? `${money(cost)} fuel` : 'Tank is full'}</small></button>
         <button className="action" onClick={() => s.openPanel('business')}><strong>{s.upgrades.irrigation ? '✓ Drip lines on' : '🚿 Drip irrigation'}</strong><small>{s.upgrades.irrigation ? 'Waters dry beds daily' : 'See business upgrades'}</small></button>

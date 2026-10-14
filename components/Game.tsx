@@ -116,39 +116,39 @@ function CameraControls() {
         <div
           style={{
             position: 'absolute',
-            bottom: '74px',
+            bottom: '78px',
             left: '50%',
             transform: 'translateX(-50%)',
-            background: 'rgba(20, 28, 38, 0.94)',
-            border: '1px solid #3b82f6',
+            background: 'rgba(255, 255, 255, 0.98)',
+            border: '2px solid var(--green)',
             borderRadius: '24px',
-            padding: '6px 18px',
-            color: '#e2e8f0',
-            fontSize: '13px',
-            fontWeight: 500,
+            padding: '8px 20px',
+            color: 'var(--green-dark)',
+            fontSize: '13.5px',
+            fontWeight: 600,
             display: 'flex',
             alignItems: 'center',
-            gap: '12px',
-            boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+            gap: '14px',
+            boxShadow: 'var(--card-shadow)',
             zIndex: 40,
             pointerEvents: 'auto',
           }}
         >
-          <span>🔭 <strong>Inspection Mode</strong>: Pan with WASD / Arrows · Drag to orbit · Scroll to zoom</span>
+          <span>🔭 <strong>Inspection</strong>: WASD pan · Drag orbit · Scroll zoom</span>
           <button
             onClick={() => { setCameraMode('follow'); setInspecting(false); }}
             style={{
-              background: '#2563eb',
+              background: 'var(--green)',
               color: '#fff',
               border: 'none',
               borderRadius: '12px',
-              padding: '4px 10px',
-              fontSize: '12px',
+              padding: '6px 14px',
+              fontSize: '12.5px',
               cursor: 'pointer',
-              fontWeight: 600,
+              fontWeight: 700,
             }}
           >
-            Exit (ESC / C)
+            Exit (ESC)
           </button>
         </div>
       )}
@@ -213,7 +213,7 @@ function Hud() {
               </div>
             ))}
           </div>
-          <small className="muted">Forecasts further out are less reliable.</small>
+          <small className="muted">5-day weather outlook</small>
         </div>
         {s.events.length > 0 && <div className="events">{s.events.map(e => <span key={e.kind} className="chip">{EVENT_LABEL[e.kind]} · {e.daysLeft}d</span>)}</div>}
         <div className="weather"><span>FRESH</span><b>{money(s.market.fresh)}/kg</b><span>DRIED</span><b>{money(s.market.dried)}/kg</b></div>
@@ -224,13 +224,16 @@ function Hud() {
           <div className="card">
             <div className="eyebrow">Operations</div>
             <h3>Run the farm</h3>
-            <p className="muted small"><span className="hint-mouse">Walk with <kbd>WASD</kbd> or click the ground. Press <kbd>E</kbd> next to a plot, building or person. Scroll to zoom; <kbd>Q</kbd>/<kbd>R</kbd> or right-drag to turn the view.</span><span className="hint-touch">Tap the ground to walk, tap a plot, building or person to use it. Pinch to zoom, twist two fingers to turn the view.</span> Every action costs energy; workers add more each day.</p>
+            <p className="muted small">
+              <span className="hint-mouse"><kbd>WASD</kbd> Move · <kbd>E</kbd> Interact · <kbd>Q</kbd>/<kbd>R</kbd> Turn · Scroll Zoom</span>
+              <span className="hint-touch">Tap to walk & interact · Pinch zoom</span>
+            </p>
             <div className="action-grid">
-              <button className="action primary" data-tut="end-day" onClick={s.advance}><strong>🌙 End day</strong><small>{nightly > 0 ? `${money(nightly)} wages & upkeep tonight` : 'Weather, growth, wages'}</small></button>
-              <button className="action" onClick={s.pump} disabled={s.water >= tankCapacity(s)}><strong>⛽ Pump borehole</strong><small>Refill tank with fuel</small></button>
+              <button className="action primary" data-tut="end-day" onClick={s.advance}><strong>🌙 End day</strong><small>{nightly > 0 ? `${money(nightly)} nightly costs` : 'Advance day'}</small></button>
+              <button className="action" onClick={s.pump} disabled={s.water >= tankCapacity(s)}><strong>⛽ Pump borehole</strong><small>Fill water tank</small></button>
               <button className="action" onClick={() => setPanel('storage')}><strong>📦 Storage</strong><small>{Math.round(freshKg)} kg fresh · {Math.round(driedKg)} kg dried</small></button>
-              <button className="action" onClick={() => setPanel('business')}><strong>🏗 Business</strong><small>Workers, insurance, upgrades</small></button>
-              <button className="action" onClick={() => setBulkModal(true)}><strong>🚜 Bulk operations</strong><small>Till, plant, water & treat</small></button>
+              <button className="action" onClick={() => setPanel('business')}><strong>🏗 Business</strong><small>Workers, loans & upgrades</small></button>
+              <button className="action" onClick={() => setBulkModal(true)}><strong>🚜 Bulk operations</strong><small>Field automation</small></button>
             </div>
             {ready.length > 0 && <div className="alert good">Ready to harvest: {ready.map(plotName).join(', ')}</div>}
           </div>
@@ -270,8 +273,8 @@ function Hud() {
               <h4>What the farm is teaching you</h4>
               {s.log.map((l, i) => <div key={i} className={`log ${l.severity}`}><small>Day {l.day}</small> {l.text}</div>)}
               <div className="journal-actions">
-                <button className="action" onClick={s.replayTutorial} disabled={tutorialOn}><strong>🎓 Replay tutorial</strong><small>{tutorialOn ? 'Tutorial in progress' : 'Walk through the basics again on this farm'}</small></button>
-                <button className="action" onClick={() => setConfirmNew(true)}><strong>🌱 Start a new season</strong><small>New random seed. Replaces this farm.</small></button>
+                <button className="action" onClick={s.replayTutorial} disabled={tutorialOn}><strong>🎓 Replay tutorial</strong><small>{tutorialOn ? 'Tutorial in progress' : 'Review farming basics'}</small></button>
+                <button className="action" onClick={() => setConfirmNew(true)}><strong>🌱 Start a new season</strong><small>Begin fresh season</small></button>
               </div>
             </>}
           </div>

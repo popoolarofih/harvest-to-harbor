@@ -82,47 +82,47 @@ export default function BusinessPanel() {
     </div>
 
     {/* Sub-navigation tabs */}
-    <div style={{ display: 'flex', gap: '6px', margin: '10px 0 16px', background: '#121a13', padding: '4px', borderRadius: '12px', border: '1px solid #ffffff12' }}>
+    <div style={{ display: 'flex', gap: '8px', margin: '12px 0 20px', background: 'var(--panel2)', padding: '6px', borderRadius: '16px', border: '1.5px solid var(--green-border-subtle)' }}>
       <button
         className={`tab ${activeTab === 'reports' ? 'active' : ''}`}
-        style={{ flex: 1, padding: '8px 10px', fontSize: '11px', textAlign: 'center' }}
+        style={{ flex: 1, padding: '10px 14px', fontSize: '13px', fontWeight: 600, textAlign: 'center' }}
         onClick={() => setActiveTab('reports')}
       >
-        📊 Financial Reports & Ledger
+        📊 Financial Reports
       </button>
       <button
         className={`tab ${activeTab === 'operations' ? 'active' : ''}`}
-        style={{ flex: 1, padding: '8px 10px', fontSize: '11px', textAlign: 'center' }}
+        style={{ flex: 1, padding: '10px 14px', fontSize: '13px', fontWeight: 600, textAlign: 'center' }}
         onClick={() => setActiveTab('operations')}
       >
         ⚙️ Operations & Loans
       </button>
       <button
         className={`tab ${activeTab === 'crew' ? 'active' : ''}`}
-        style={{ flex: 1, padding: '8px 10px', fontSize: '11px', textAlign: 'center' }}
+        style={{ flex: 1, padding: '10px 14px', fontSize: '13px', fontWeight: 600, textAlign: 'center' }}
         onClick={() => setActiveTab('crew')}
       >
-        👥 Specialist Crew ({s.crew?.length ?? 0})
+        👥 Crew ({s.crew?.length ?? 0})
       </button>
       <button
         className={`tab ${activeTab === 'prestige' ? 'active' : ''}`}
-        style={{ flex: 1, padding: '8px 10px', fontSize: '11px', textAlign: 'center' }}
+        style={{ flex: 1, padding: '10px 14px', fontSize: '13px', fontWeight: 600, textAlign: 'center' }}
         onClick={() => setActiveTab('prestige')}
       >
-        🏆 Prestige & Community ({(s.prestige?.length ?? 0)})
+        🏆 Community ({(s.prestige?.length ?? 0)})
       </button>
     </div>
 
     {activeTab === 'reports' && (
       <div>
         {/* Period Selector */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap', gap: '8px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', flexWrap: 'wrap', gap: '10px' }}>
           <div>
-            <span style={{ fontSize: '10px', textTransform: 'uppercase', color: 'var(--muted)', display: 'block' }}>Accounting Period</span>
+            <span style={{ fontSize: '11.5px', textTransform: 'uppercase', color: 'var(--green2)', fontWeight: 700, letterSpacing: '0.08em', display: 'block' }}>Accounting Period</span>
             <select
               value={selectedPeriodIdx}
               onChange={e => setSelectedPeriodIdx(Number(e.target.value))}
-              style={{ background: '#1a241b', color: '#fff', border: '1px solid var(--line)', padding: '6px 10px', borderRadius: '8px', fontSize: '12px' }}
+              style={{ background: 'var(--white)', color: 'var(--text)', border: '1.5px solid var(--green-border-subtle)', padding: '8px 12px', borderRadius: '10px', fontSize: '13.5px', fontWeight: 600 }}
             >
               {periods.map((p, idx) => (
                 <option key={idx} value={idx}>{p.label}</option>
@@ -131,7 +131,7 @@ export default function BusinessPanel() {
           </div>
           <button
             onClick={handleExportCsv}
-            style={{ border: '1px solid #557447', background: '#22341e', color: '#b4e16e', padding: '6px 12px', borderRadius: '8px', fontSize: '11px', cursor: 'pointer' }}
+            style={{ border: '1.5px solid var(--green)', background: 'var(--green)', color: '#ffffff', padding: '8px 16px', borderRadius: '10px', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}
           >
             📥 Export Audit Ledger (CSV)
           </button>
@@ -139,23 +139,23 @@ export default function BusinessPanel() {
 
         {/* Business Analytics Insights */}
         {report.insights.length > 0 && (
-          <div style={{ display: 'grid', gap: '8px', marginBottom: '16px' }}>
+          <div style={{ display: 'grid', gap: '10px', marginBottom: '18px' }}>
             {report.insights.map((ins, idx) => (
               <div
                 key={idx}
                 style={{
-                  background: ins.type === 'good' ? '#142215' : ins.type === 'warn' ? '#281c12' : '#151d24',
-                  border: `1px solid ${ins.type === 'good' ? '#3d6139' : ins.type === 'warn' ? '#744621' : '#2b4457'}`,
-                  borderRadius: '10px',
-                  padding: '8px 12px',
-                  fontSize: '12px',
+                  background: ins.type === 'good' ? '#f0fdf4' : ins.type === 'warn' ? '#fef3c7' : '#eff6ff',
+                  border: `1.5px solid ${ins.type === 'good' ? 'var(--green-border)' : ins.type === 'warn' ? '#fcd34d' : '#93c5fd'}`,
+                  borderRadius: '12px',
+                  padding: '12px 16px',
+                  fontSize: '13.5px',
                 }}
               >
-                <b style={{ color: ins.type === 'good' ? 'var(--green)' : ins.type === 'warn' ? 'var(--orange)' : '#81b7e3' }}>
+                <b style={{ color: ins.type === 'good' ? 'var(--green2)' : ins.type === 'warn' ? '#92400e' : '#1d4ed8' }}>
                   {ins.type === 'good' ? '✓ ' : ins.type === 'warn' ? '⚠ ' : 'ℹ '}
                   {ins.title}
                 </b>
-                <p style={{ margin: '4px 0 0', color: '#cfd8ce', fontSize: '11px', lineHeight: 1.4 }}>
+                <p style={{ margin: '4px 0 0', color: 'var(--text)', fontSize: '13px', lineHeight: 1.45 }}>
                   {ins.message}
                 </p>
               </div>
@@ -164,53 +164,53 @@ export default function BusinessPanel() {
         )}
 
         {/* Executive Summary Cards */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '8px', marginBottom: '14px' }}>
-          <div style={{ background: '#172019', padding: '10px', borderRadius: '10px', border: '1px solid #ffffff10' }}>
-            <span style={{ fontSize: '10px', color: 'var(--muted)' }}>Gross Sales</span>
-            <b style={{ display: 'block', fontSize: '14px', marginTop: '2px' }}>{money(inc.totalRevenue)}</b>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '10px', marginBottom: '16px' }}>
+          <div style={{ background: '#f8faf8', padding: '14px', borderRadius: '14px', border: '1.5px solid var(--green-border-subtle)' }}>
+            <span style={{ fontSize: '11.5px', color: 'var(--green2)', fontWeight: 700, textTransform: 'uppercase' }}>Gross Sales</span>
+            <b style={{ display: 'block', fontSize: '18px', marginTop: '4px', color: 'var(--green-dark)' }}>{money(inc.totalRevenue)}</b>
           </div>
-          <div style={{ background: '#172019', padding: '10px', borderRadius: '10px', border: '1px solid #ffffff10' }}>
-            <span style={{ fontSize: '10px', color: 'var(--muted)' }}>Operating Profit</span>
-            <b style={{ display: 'block', fontSize: '14px', marginTop: '2px', color: inc.operatingProfit >= 0 ? 'var(--green)' : 'var(--orange)' }}>
+          <div style={{ background: '#f8faf8', padding: '14px', borderRadius: '14px', border: '1.5px solid var(--green-border-subtle)' }}>
+            <span style={{ fontSize: '11.5px', color: 'var(--green2)', fontWeight: 700, textTransform: 'uppercase' }}>Operating Profit</span>
+            <b style={{ display: 'block', fontSize: '18px', marginTop: '4px', color: inc.operatingProfit >= 0 ? 'var(--green)' : 'var(--orange)' }}>
               {money(inc.operatingProfit)}
             </b>
           </div>
-          <div style={{ background: '#172019', padding: '10px', borderRadius: '10px', border: '1px solid #ffffff10' }}>
-            <span style={{ fontSize: '10px', color: 'var(--muted)' }}>Net Margin</span>
-            <b style={{ display: 'block', fontSize: '14px', marginTop: '2px' }}>{report.netMargin}%</b>
+          <div style={{ background: '#f8faf8', padding: '14px', borderRadius: '14px', border: '1.5px solid var(--green-border-subtle)' }}>
+            <span style={{ fontSize: '11.5px', color: 'var(--green2)', fontWeight: 700, textTransform: 'uppercase' }}>Net Margin</span>
+            <b style={{ display: 'block', fontSize: '18px', marginTop: '4px', color: 'var(--green-dark)' }}>{report.netMargin}%</b>
           </div>
-          <div style={{ background: '#172019', padding: '10px', borderRadius: '10px', border: '1px solid #ffffff10' }}>
-            <span style={{ fontSize: '10px', color: 'var(--muted)' }}>Return on Investment</span>
-            <b style={{ display: 'block', fontSize: '14px', marginTop: '2px', color: 'var(--green)' }}>{report.roi}% ROI</b>
+          <div style={{ background: '#f8faf8', padding: '14px', borderRadius: '14px', border: '1.5px solid var(--green-border-subtle)' }}>
+            <span style={{ fontSize: '11.5px', color: 'var(--green2)', fontWeight: 700, textTransform: 'uppercase' }}>Return on Investment</span>
+            <b style={{ display: 'block', fontSize: '18px', marginTop: '4px', color: 'var(--green)' }}>{report.roi}% ROI</b>
           </div>
         </div>
 
         {/* Statement Switcher */}
-        <div style={{ display: 'flex', gap: '4px', margin: '14px 0 10px', borderBottom: '1px solid var(--line)', paddingBottom: '6px' }}>
+        <div style={{ display: 'flex', gap: '6px', margin: '16px 0 12px', borderBottom: '1.5px solid var(--line)', paddingBottom: '8px' }}>
           <button
             className={`tab ${statementView === 'pnl' ? 'active' : ''}`}
-            style={{ fontSize: '11px', padding: '6px 10px' }}
+            style={{ fontSize: '13px', padding: '8px 14px' }}
             onClick={() => setStatementView('pnl')}
           >
             Income Statement (P&L)
           </button>
           <button
             className={`tab ${statementView === 'balance' ? 'active' : ''}`}
-            style={{ fontSize: '11px', padding: '6px 10px' }}
+            style={{ fontSize: '13px', padding: '8px 14px' }}
             onClick={() => setStatementView('balance')}
           >
             Balance Sheet
           </button>
           <button
             className={`tab ${statementView === 'cashflow' ? 'active' : ''}`}
-            style={{ fontSize: '11px', padding: '6px 10px' }}
+            style={{ fontSize: '13px', padding: '8px 14px' }}
             onClick={() => setStatementView('cashflow')}
           >
-            Cash Flow Statement
+            Cash Flow
           </button>
           <button
             className={`tab ${statementView === 'ledger' ? 'active' : ''}`}
-            style={{ fontSize: '11px', padding: '6px 10px' }}
+            style={{ fontSize: '13px', padding: '8px 14px' }}
             onClick={() => setStatementView('ledger')}
           >
             Audit Ledger ({filteredLedger.length})
@@ -219,13 +219,13 @@ export default function BusinessPanel() {
 
         {/* 1. Income Statement */}
         {statementView === 'pnl' && (
-          <div style={{ background: '#121813', borderRadius: '12px', padding: '12px', border: '1px solid #ffffff10' }}>
-            <div style={{ fontSize: '11px', textTransform: 'uppercase', color: 'var(--green)', letterSpacing: '0.1em', marginBottom: '8px' }}>
+          <div style={{ background: '#f8faf8', borderRadius: '16px', padding: '18px', border: '1.5px solid var(--green-border-subtle)' }}>
+            <div style={{ fontSize: '12px', textTransform: 'uppercase', color: 'var(--green2)', fontWeight: 700, letterSpacing: '0.1em', marginBottom: '10px' }}>
               Statement of Profit or Loss · {period.label}
             </div>
 
-            <div style={{ display: 'grid', gap: '4px', fontSize: '12px' }}>
-              <div style={{ fontWeight: 'bold', color: '#e0ece0', marginTop: '4px' }}>Revenue:</div>
+            <div style={{ display: 'grid', gap: '6px', fontSize: '13.5px' }}>
+              <div style={{ fontWeight: 'bold', color: 'var(--green-dark)', marginTop: '4px' }}>Revenue:</div>
               <div style={{ display: 'flex', justifyContent: 'space-between', paddingLeft: '12px' }}>
                 <span className="muted">Domestic Produce Sales</span>
                 <b>{money(inc.domesticSales)}</b>
@@ -240,12 +240,12 @@ export default function BusinessPanel() {
                   <b>{money(inc.processingRevenue)}</b>
                 </div>
               )}
-              <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #ffffff15', paddingTop: '4px', fontWeight: 'bold' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid var(--line)', paddingTop: '6px', fontWeight: 'bold' }}>
                 <span>Total Gross Revenue</span>
                 <span style={{ color: 'var(--green)' }}>{money(inc.totalRevenue)}</span>
               </div>
 
-              <div style={{ fontWeight: 'bold', color: '#e0ece0', marginTop: '8px' }}>Cost of Goods Sold (COGS):</div>
+              <div style={{ fontWeight: 'bold', color: 'var(--green-dark)', marginTop: '10px' }}>Cost of Goods Sold (COGS):</div>
               <div style={{ display: 'flex', justifyContent: 'space-between', paddingLeft: '12px' }}>
                 <span className="muted">Seeds, Fertilizer & Compost Inputs</span>
                 <span>({money(inc.inputCosts)})</span>
@@ -254,12 +254,12 @@ export default function BusinessPanel() {
                 <span className="muted">Packaging Sacks & Milling Supplies</span>
                 <span>({money(inc.processingPackaging)})</span>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #ffffff15', paddingTop: '4px', fontWeight: 'bold' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid var(--line)', paddingTop: '6px', fontWeight: 'bold' }}>
                 <span>Gross Margin</span>
                 <span>{money(inc.grossMargin)}</span>
               </div>
 
-              <div style={{ fontWeight: 'bold', color: '#e0ece0', marginTop: '8px' }}>Operating Expenses (OpEx):</div>
+              <div style={{ fontWeight: 'bold', color: 'var(--green-dark)', marginTop: '10px' }}>Operating Expenses (OpEx):</div>
               <div style={{ display: 'flex', justifyContent: 'space-between', paddingLeft: '12px' }}>
                 <span className="muted">Diesel Fuel & Borehole Utilities</span>
                 <span>({money(inc.fuelUtilities)})</span>
@@ -280,19 +280,19 @@ export default function BusinessPanel() {
                 <span className="muted">Agricultural Insurance Premiums</span>
                 <span>({money(inc.insurancePremiums)})</span>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #ffffff15', paddingTop: '4px', fontWeight: 'bold' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid var(--line)', paddingTop: '6px', fontWeight: 'bold' }}>
                 <span>Total Operating Expenses</span>
                 <span>({money(inc.totalOperatingExpenses)})</span>
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid var(--line)', paddingTop: '6px', fontWeight: 'bold', fontSize: '13px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid var(--line)', paddingTop: '8px', fontWeight: 'bold', fontSize: '14.5px' }}>
                 <span>Net Operating Profit</span>
                 <span style={{ color: inc.operatingProfit >= 0 ? 'var(--green)' : 'var(--orange)' }}>
                   {money(inc.operatingProfit)}
                 </span>
               </div>
 
-              <div style={{ fontWeight: 'bold', color: '#e0ece0', marginTop: '8px' }}>Financing & Other Items:</div>
+              <div style={{ fontWeight: 'bold', color: 'var(--green-dark)', marginTop: '10px' }}>Financing & Other Items:</div>
               <div style={{ display: 'flex', justifyContent: 'space-between', paddingLeft: '12px' }}>
                 <span className="muted">Loan Accrued Interest</span>
                 <span>({money(inc.loanInterest)})</span>
@@ -310,7 +310,7 @@ export default function BusinessPanel() {
                 </div>
               )}
 
-              <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '2px solid var(--line)', paddingTop: '8px', marginTop: '6px', fontWeight: 'bold', fontSize: '14px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '2px solid var(--line)', paddingTop: '10px', marginTop: '8px', fontWeight: 'bold', fontSize: '15.5px' }}>
                 <span>Net Income / Bottom Line</span>
                 <span style={{ color: inc.netProfit >= 0 ? 'var(--green)' : 'var(--orange)' }}>
                   {money(inc.netProfit)}
@@ -322,13 +322,13 @@ export default function BusinessPanel() {
 
         {/* 2. Balance Sheet */}
         {statementView === 'balance' && (
-          <div style={{ background: '#121813', borderRadius: '12px', padding: '12px', border: '1px solid #ffffff10' }}>
-            <div style={{ fontSize: '11px', textTransform: 'uppercase', color: 'var(--green)', letterSpacing: '0.1em', marginBottom: '8px' }}>
+          <div style={{ background: '#f8faf8', borderRadius: '16px', padding: '18px', border: '1.5px solid var(--green-border-subtle)' }}>
+            <div style={{ fontSize: '12px', textTransform: 'uppercase', color: 'var(--green2)', fontWeight: 700, letterSpacing: '0.1em', marginBottom: '10px' }}>
               Statement of Financial Position · As of Day {period.toDay}
             </div>
 
-            <div style={{ display: 'grid', gap: '4px', fontSize: '12px' }}>
-              <div style={{ fontWeight: 'bold', color: '#e0ece0', marginTop: '4px' }}>Assets:</div>
+            <div style={{ display: 'grid', gap: '6px', fontSize: '13.5px' }}>
+              <div style={{ fontWeight: 'bold', color: 'var(--green-dark)', marginTop: '4px' }}>Assets:</div>
               <div style={{ display: 'flex', justifyContent: 'space-between', paddingLeft: '12px' }}>
                 <span className="muted">Cash & Equivalents</span>
                 <b>{money(bal.cash)}</b>
@@ -345,12 +345,12 @@ export default function BusinessPanel() {
                 <span className="muted">Equipment & Capital Infrastructure</span>
                 <b>{money(bal.equipmentValuation)}</b>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #ffffff15', paddingTop: '4px', fontWeight: 'bold' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid var(--line)', paddingTop: '6px', fontWeight: 'bold' }}>
                 <span>Total Assets</span>
                 <span style={{ color: 'var(--green)' }}>{money(bal.totalAssets)}</span>
               </div>
 
-              <div style={{ fontWeight: 'bold', color: '#e0ece0', marginTop: '10px' }}>Liabilities:</div>
+              <div style={{ fontWeight: 'bold', color: 'var(--green-dark)', marginTop: '12px' }}>Liabilities:</div>
               <div style={{ display: 'flex', justifyContent: 'space-between', paddingLeft: '12px' }}>
                 <span className="muted">Outstanding Bank & Equipment Debt</span>
                 <span className={bal.outstandingDebt > 0 ? 'warn' : ''}>{money(bal.outstandingDebt)}</span>
@@ -359,12 +359,12 @@ export default function BusinessPanel() {
                 <span className="muted">Unfulfilled Contract Advance Liabilities</span>
                 <span>{money(bal.contractLiabilities)}</span>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #ffffff15', paddingTop: '4px', fontWeight: 'bold' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid var(--line)', paddingTop: '6px', fontWeight: 'bold' }}>
                 <span>Total Liabilities</span>
                 <span>{money(bal.totalLiabilities)}</span>
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '2px solid var(--line)', paddingTop: '8px', marginTop: '8px', fontWeight: 'bold', fontSize: '14px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '2px solid var(--line)', paddingTop: '10px', marginTop: '10px', fontWeight: 'bold', fontSize: '15px' }}>
                 <span>Total Enterprise Equity (Net Worth)</span>
                 <span style={{ color: bal.equity >= 0 ? 'var(--green)' : 'var(--orange)' }}>
                   {money(bal.equity)}
@@ -376,12 +376,12 @@ export default function BusinessPanel() {
 
         {/* 3. Cash Flow Statement */}
         {statementView === 'cashflow' && (
-          <div style={{ background: '#121813', borderRadius: '12px', padding: '12px', border: '1px solid #ffffff10' }}>
-            <div style={{ fontSize: '11px', textTransform: 'uppercase', color: 'var(--green)', letterSpacing: '0.1em', marginBottom: '8px' }}>
+          <div style={{ background: '#f8faf8', borderRadius: '16px', padding: '18px', border: '1.5px solid var(--green-border-subtle)' }}>
+            <div style={{ fontSize: '12px', textTransform: 'uppercase', color: 'var(--green2)', fontWeight: 700, letterSpacing: '0.1em', marginBottom: '10px' }}>
               Cash Flow Statement & 30-Day Liquidity Forecast
             </div>
 
-            <div style={{ display: 'grid', gap: '4px', fontSize: '12px', marginBottom: '14px' }}>
+            <div style={{ display: 'grid', gap: '6px', fontSize: '13.5px', marginBottom: '16px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <span className="muted">Cash Flow from Operating Activities</span>
                 <b style={{ color: cf.operatingCashFlow >= 0 ? 'var(--green)' : 'var(--orange)' }}>{money(cf.operatingCashFlow)}</b>
@@ -394,36 +394,37 @@ export default function BusinessPanel() {
                 <span className="muted">Cash Flow from Financing Activities</span>
                 <b>{money(cf.financingCashFlow)}</b>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #ffffff15', paddingTop: '4px', fontWeight: 'bold' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid var(--line)', paddingTop: '6px', fontWeight: 'bold' }}>
                 <span>Net Cash Movement</span>
                 <span style={{ color: cf.netCashFlow >= 0 ? 'var(--green)' : 'var(--orange)' }}>{money(cf.netCashFlow)}</span>
               </div>
             </div>
 
-            <h4 style={{ margin: '10px 0 6px', fontSize: '13px' }}>Forward 30-Day Cash Forecast</h4>
+            <h4 style={{ margin: '12px 0 8px', fontSize: '15px' }}>Forward 30-Day Cash Forecast</h4>
             <CashChart points={cashForecast(s, 30)} />
           </div>
         )}
 
         {/* 4. Audit Ledger Table */}
         {statementView === 'ledger' && (
-          <div style={{ background: '#121813', borderRadius: '12px', padding: '12px', border: '1px solid #ffffff10' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', flexWrap: 'wrap', gap: '6px' }}>
-              <div style={{ fontSize: '11px', textTransform: 'uppercase', color: 'var(--green)', letterSpacing: '0.1em' }}>
+          <div style={{ background: '#f8faf8', borderRadius: '16px', padding: '18px', border: '1.5px solid var(--green-border-subtle)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap', gap: '8px' }}>
+              <div style={{ fontSize: '12px', textTransform: 'uppercase', color: 'var(--green2)', fontWeight: 700, letterSpacing: '0.1em' }}>
                 Audit Ledger Records ({filteredLedger.length})
               </div>
-              <div style={{ display: 'flex', gap: '4px' }}>
+              <div style={{ display: 'flex', gap: '6px' }}>
                 {(['all', 'revenue', 'cogs', 'opex', 'financing', 'capex'] as const).map(flt => (
                   <button
                     key={flt}
                     onClick={() => setLedgerFilter(flt)}
                     style={{
-                      background: ledgerFilter === flt ? '#2b3b27' : '#172218',
-                      color: ledgerFilter === flt ? 'var(--green)' : 'var(--muted)',
-                      border: '1px solid #ffffff12',
-                      padding: '3px 7px',
-                      borderRadius: '6px',
-                      fontSize: '10px',
+                      background: ledgerFilter === flt ? 'var(--green)' : '#ffffff',
+                      color: ledgerFilter === flt ? '#ffffff' : 'var(--text)',
+                      border: '1.5px solid var(--green-border-subtle)',
+                      padding: '5px 10px',
+                      borderRadius: '8px',
+                      fontSize: '12px',
+                      fontWeight: 600,
                       textTransform: 'capitalize',
                       cursor: 'pointer',
                     }}
@@ -434,26 +435,26 @@ export default function BusinessPanel() {
               </div>
             </div>
 
-            <div style={{ maxHeight: '340px', overflowY: 'auto', fontSize: '11px' }}>
+            <div style={{ maxHeight: '360px', overflowY: 'auto', fontSize: '13px' }}>
               {filteredLedger.length === 0 ? (
-                <p className="muted" style={{ padding: '12px', textAlign: 'center' }}>No recorded ledger entries match this period and filter.</p>
+                <p className="muted" style={{ padding: '14px', textAlign: 'center' }}>No recorded ledger entries match this period and filter.</p>
               ) : (
                 <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
                   <thead>
-                    <tr style={{ color: 'var(--muted)', borderBottom: '1px solid #ffffff15' }}>
-                      <th style={{ padding: '4px 6px' }}>Day</th>
-                      <th style={{ padding: '4px 6px' }}>Category</th>
-                      <th style={{ padding: '4px 6px' }}>Description</th>
-                      <th style={{ padding: '4px 6px', textAlign: 'right' }}>Amount</th>
+                    <tr style={{ color: 'var(--green2)', borderBottom: '1.5px solid var(--line)', fontWeight: 700 }}>
+                      <th style={{ padding: '6px 8px' }}>Day</th>
+                      <th style={{ padding: '6px 8px' }}>Category</th>
+                      <th style={{ padding: '6px 8px' }}>Description</th>
+                      <th style={{ padding: '6px 8px', textAlign: 'right' }}>Amount</th>
                     </tr>
                   </thead>
                   <tbody>
                     {filteredLedger.map((t, idx) => (
-                      <tr key={idx} style={{ borderBottom: '1px solid #ffffff0a' }}>
-                        <td style={{ padding: '6px' }}>D{t.day}</td>
-                        <td style={{ padding: '6px', color: 'var(--muted)', textTransform: 'capitalize' }}>{t.category}</td>
-                        <td style={{ padding: '6px' }}>{t.description}</td>
-                        <td style={{ padding: '6px', textAlign: 'right', fontWeight: 'bold', color: t.direction === 'inflow' ? 'var(--green)' : '#e58e72' }}>
+                      <tr key={idx} style={{ borderBottom: '1px solid var(--line)' }}>
+                        <td style={{ padding: '8px', fontWeight: 600 }}>D{t.day}</td>
+                        <td style={{ padding: '8px', color: 'var(--muted)', textTransform: 'capitalize' }}>{t.category}</td>
+                        <td style={{ padding: '8px' }}>{t.description}</td>
+                        <td style={{ padding: '8px', textAlign: 'right', fontWeight: 'bold', color: t.direction === 'inflow' ? 'var(--green)' : '#b91c1c' }}>
                           {t.direction === 'inflow' ? '+' : '-'}{money(t.amount)}
                         </td>
                       </tr>
@@ -596,36 +597,38 @@ export default function BusinessPanel() {
                 <div>
                   <div className="batch-head">
                     <b>{role.icon} {cand.name}</b>
-                    <span className="grade gA" style={{ textTransform: 'capitalize', fontSize: '10px' }}>{cand.level}</span>
+                    <span className="grade gA" style={{ textTransform: 'capitalize', fontSize: '11px', padding: '3px 8px' }}>{cand.level}</span>
                   </div>
-                  <strong style={{ display: 'block', fontSize: '12px', color: 'var(--green)', margin: '2px 0 4px' }}>
+                  <strong style={{ display: 'block', fontSize: '14px', color: 'var(--green-dark)', margin: '2px 0 4px' }}>
                     {role.title}
                   </strong>
-                  <small className="muted" style={{ display: 'block', fontSize: '11px', lineHeight: 1.4, marginBottom: '6px' }}>
+                  <small className="muted" style={{ display: 'block', fontSize: '12.5px', lineHeight: 1.4, marginBottom: '6px' }}>
                     {cand.bio}
                   </small>
-                  <div style={{ background: '#101710', borderRadius: '8px', padding: '6px 8px', fontSize: '11px', margin: '6px 0' }}>
+                  <div style={{ background: '#f0fdf4', border: '1px solid var(--green-border-subtle)', borderRadius: '10px', padding: '8px 10px', fontSize: '12.5px', margin: '8px 0', color: 'var(--green-dark)' }}>
                     <div>✨ {role.perkDesc}</div>
                     <div style={{ marginTop: '3px', color: 'var(--muted)' }}>{trait.icon} {trait.label}: {trait.desc}</div>
                   </div>
                 </div>
 
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '10px', paddingTop: '8px', borderTop: '1px solid #ffffff12' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '12px', paddingTop: '10px', borderTop: '1px solid var(--line)' }}>
                   <div>
-                    <span style={{ fontSize: '10px', color: 'var(--muted)', display: 'block' }}>Wage</span>
-                    <b>{money(cand.dailyWage)}/day</b>
+                    <span style={{ fontSize: '11px', color: 'var(--green2)', fontWeight: 700, display: 'block' }}>Wage</span>
+                    <b style={{ fontSize: '15px', color: 'var(--green-dark)' }}>{money(cand.dailyWage)}/day</b>
                   </div>
                   <button
                     onClick={() => s.hireCandidate(cand.id)}
                     disabled={!canHire}
                     style={{
-                      border: '1px solid #557447',
-                      background: canHire ? '#273b23' : '#1a221a',
-                      color: canHire ? '#e4f4d8' : '#777',
-                      borderRadius: '8px',
-                      padding: '6px 12px',
-                      fontSize: '11px',
+                      border: '1.5px solid var(--green)',
+                      background: canHire ? 'var(--green)' : '#e2ece4',
+                      color: canHire ? '#ffffff' : '#6b8572',
+                      borderRadius: '10px',
+                      padding: '8px 16px',
+                      fontSize: '13px',
+                      fontWeight: 700,
                       cursor: canHire ? 'pointer' : 'not-allowed',
+                      boxShadow: canHire ? '0 2px 8px rgba(22, 163, 74, 0.25)' : 'none',
                     }}
                   >
                     Hire ({money(cand.hireCost)})
@@ -842,47 +845,48 @@ export default function BusinessPanel() {
         </div>
 
         {/* Road cooperative active benefit badge */}
+        {/* Road cooperative active benefit badge */}
         {(s.coopRoadBenefitDays ?? 0) > 0 && (
-          <div className="card" style={{ marginBottom: '14px', border: '1px solid #10b98166', background: 'rgba(16, 185, 129, 0.08)' }}>
-            <b style={{ color: '#34d399' }}>🛣️ Kafanchan Road-Grading Benefit Active</b>
-            <p style={{ margin: '4px 0 0', fontSize: '12px', color: '#e2e8f0' }}>
+          <div className="card" style={{ marginBottom: '14px', border: '1.5px solid var(--green-border)', background: 'var(--green-light)' }}>
+            <b style={{ color: 'var(--green-dark)', fontSize: '15px' }}>🛣️ Kafanchan Road-Grading Benefit Active</b>
+            <p style={{ margin: '6px 0 0', fontSize: '13.5px', color: 'var(--text)', lineHeight: 1.5 }}>
               The arterial road maintenance pool is active. Export transit breakdown risks are reduced by 60% for the next <strong>{s.coopRoadBenefitDays} days</strong>.
             </p>
           </div>
         )}
 
         {/* Village Cooperative & Solidarity Requests */}
-        <h3 style={{ margin: '16px 0 8px', fontSize: '14px', color: '#e2e8f0' }}>🤝 Village Cooperative Solidarity Requests</h3>
+        <h3 style={{ margin: '18px 0 10px', fontSize: '16px', color: 'var(--green-dark)' }}>🤝 Village Cooperative Solidarity Requests</h3>
         {(!s.cooperativeEvents || s.cooperativeEvents.filter(e => e.status === 'pending').length === 0) ? (
           <div className="hint-card" style={{ marginBottom: '14px' }}>
-            <small className="muted">
+            <small className="muted" style={{ fontSize: '13px' }}>
               🌾 No pending community solidarity appeals right now. Neighboring cooperatives reach out during seasonal transitions and weather extremes.
             </small>
           </div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '16px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '18px' }}>
             {s.cooperativeEvents.filter(e => e.status === 'pending').map(e => (
-              <div key={e.id} className="card" style={{ border: '1px solid #f59e0b44' }}>
+              <div key={e.id} className="card" style={{ border: '1.5px solid var(--green-border-subtle)', background: 'var(--white)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                   <div>
-                    <b style={{ color: '#fbbf24' }}>{e.title}</b>
-                    <p style={{ margin: '4px 0 8px', fontSize: '12px', color: '#cbd5e1' }}>{e.description}</p>
-                    <div style={{ display: 'flex', gap: '16px', fontSize: '11px', color: '#94a3b8' }}>
+                    <b style={{ color: 'var(--green-dark)', fontSize: '15px' }}>{e.title}</b>
+                    <p style={{ margin: '4px 0 8px', fontSize: '13.5px', color: 'var(--text)' }}>{e.description}</p>
+                    <div style={{ display: 'flex', gap: '18px', fontSize: '12.5px', color: 'var(--muted)' }}>
                       <span><strong>Cost:</strong> {e.costLabel}</span>
                       <span><strong>Benefit:</strong> {e.benefitLabel}</span>
                     </div>
                   </div>
-                  <div style={{ display: 'flex', gap: '6px', marginLeft: '12px' }}>
+                  <div style={{ display: 'flex', gap: '8px', marginLeft: '12px' }}>
                     <button
                       className="action primary"
-                      style={{ padding: '6px 12px', fontSize: '11px' }}
+                      style={{ padding: '8px 14px', fontSize: '13px' }}
                       onClick={() => s.respondCoop(e.id, 'accept')}
                     >
                       ✓ Support
                     </button>
                     <button
                       className="action"
-                      style={{ padding: '6px 12px', fontSize: '11px' }}
+                      style={{ padding: '8px 14px', fontSize: '13px' }}
                       onClick={() => s.respondCoop(e.id, 'decline')}
                     >
                       ✕ Decline
@@ -895,34 +899,34 @@ export default function BusinessPanel() {
         )}
 
         {/* Seasonal Recurring Export Goals */}
-        <h3 style={{ margin: '16px 0 8px', fontSize: '14px', color: '#e2e8f0' }}>🎯 Seasonal Recurring Export Goals</h3>
+        <h3 style={{ margin: '18px 0 10px', fontSize: '16px', color: 'var(--green-dark)' }}>🎯 Seasonal Recurring Export Goals</h3>
         {(!s.recurringGoals || s.recurringGoals.length === 0) ? (
           <div className="hint-card" style={{ marginBottom: '14px' }}>
-            <small className="muted">
+            <small className="muted" style={{ fontSize: '13px' }}>
               🚢 Recurring seasonal export targets unlock once the farm reaches Level 6 or completes the story campaign.
             </small>
           </div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '16px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '18px' }}>
             {s.recurringGoals.map(g => (
-              <div key={g.id} className="card" style={{ border: g.completed ? '1px solid #10b98166' : '1px solid #ffffff12' }}>
+              <div key={g.id} className="card" style={{ border: g.completed ? '1.5px solid var(--green)' : '1.5px solid var(--green-border-subtle)', background: 'var(--white)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                  <b>{g.title} {g.completed ? '✓ FULFILLED' : ''}</b>
-                  <span style={{ fontSize: '11px', color: g.completed ? '#34d399' : '#94a3b8' }}>
+                  <b style={{ fontSize: '15px', color: 'var(--green-dark)' }}>{g.title} {g.completed ? '✓ FULFILLED' : ''}</b>
+                  <span style={{ fontSize: '12.5px', color: g.completed ? 'var(--green2)' : 'var(--muted)', fontWeight: 700 }}>
                     Reward: +{money(g.rewardMoney)} · +{g.rewardReputation} Rep
                   </span>
                 </div>
-                <p style={{ margin: '0 0 8px', fontSize: '12px', color: '#cbd5e1' }}>{g.description}</p>
-                <div style={{ background: '#1e293b', borderRadius: '4px', height: '6px', overflow: 'hidden' }}>
+                <p style={{ margin: '0 0 8px', fontSize: '13.5px', color: 'var(--text)' }}>{g.description}</p>
+                <div style={{ background: '#e2ece4', borderRadius: '4px', height: '8px', overflow: 'hidden' }}>
                   <div
                     style={{
-                      background: g.completed ? '#10b981' : '#3b82f6',
+                      background: g.completed ? 'var(--green)' : 'var(--green-bright)',
                       width: `${Math.min(100, (g.progressKg / g.targetKg) * 100)}%`,
                       height: '100%',
                     }}
                   />
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '4px', fontSize: '11px', color: '#94a3b8' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '6px', fontSize: '12px', color: 'var(--muted)' }}>
                   <span>Progress: {g.progressKg.toLocaleString()} / {g.targetKg.toLocaleString()} kg</span>
                   <span>Due by Day {g.deadlineDay}</span>
                 </div>

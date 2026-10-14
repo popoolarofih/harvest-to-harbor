@@ -30,13 +30,13 @@ export default function MarketPanel() {
   return <>
     <div className="eyebrow">Market</div>
     <h2>Prices & buyers</h2>
-    <div className="modal-row"><span>Exchange rate (export contracts are paid in dollars)</span><b>₦{Math.round(s.fxRate).toLocaleString()} / $</b></div>
-    {crash && <div className="alert danger">Price crash in progress ({crash.daysLeft} days left). Holding dried stock or picking a different buyer can ride it out.</div>}
+    <div className="modal-row"><span>Exchange rate (USD exports)</span><b>₦{Math.round(s.fxRate).toLocaleString()} / $</b></div>
+    {crash && <div className="alert danger">Price crash active ({crash.daysLeft} days left). Hold dried stock or choose domestic buyers.</div>}
     <div className="inventory-grid">{card('fresh', 'Fresh ginger')}{card('dried', 'Dried ginger')}{card('powder', 'Ginger powder')}</div>
     <h4>Grade premiums</h4>
-    <div className="modal-row"><span>Premium (processed goods, sealed)</span><b>+{Math.round((GRADE_MULT.Premium - 1) * 100)}%</b></div>
+    <div className="modal-row"><span>Premium (processed, sealed)</span><b>+{Math.round((GRADE_MULT.Premium - 1) * 100)}%</b></div>
     <div className="modal-row"><span>Grade A</span><b>+{Math.round((GRADE_MULT.A - 1) * 100)}%</b></div>
-    <div className="modal-row"><span>Grade B</span><b>market price</b></div>
+    <div className="modal-row"><span>Grade B</span><b>Market base</b></div>
     <div className="modal-row"><span>Grade C</span><b>{Math.round((GRADE_MULT.C - 1) * 100)}%</b></div>
     <h4>Buyers</h4>
     {BUYERS.map(b => (
@@ -45,6 +45,6 @@ export default function MarketPanel() {
         <b>{Math.round(b.priceMult * 100)}%</b>
       </div>
     ))}
-    <p className="muted">Simulated for gameplay, not a live price feed.</p>
+    <p className="muted">Simulated market prices.</p>
   </>;
 }

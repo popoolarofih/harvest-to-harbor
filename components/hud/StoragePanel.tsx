@@ -83,7 +83,7 @@ function ProcessForm({ batch, onDone }: { batch: Batch; onDone: () => void }) {
         <div><span>Cost</span><b>{money(plan.cost)}</b><small>{plan.litres ? `${plan.litres.toLocaleString()} L tank water` : 'No water used'}</small></div>
       </div>
       {problem && <div className="alert">{problem}</div>}
-      <button className="action primary wide" disabled={!!problem} onClick={() => { s.process(batch.id, c); onDone(); }}><strong>Start processing</strong><small>Wash, sort and slice, then onto the racks</small></button>
+      <button className="action primary wide" disabled={!!problem} onClick={() => { s.process(batch.id, c); onDone(); }}><strong>Start processing</strong><small>Wash, slice & load racks</small></button>
     </div>
   );
 }
@@ -95,18 +95,18 @@ function FreshBatch({ b }: { b: Batch }) {
   return (
     <div className="batch">
       <div className="batch-head"><b>Fresh batch #{b.id} · {Math.round(b.kg).toLocaleString()} kg</b>{gradeChip(b)}</div>
-      <small className="muted">Quality {Math.round(b.quality)}/100 · {s.day - b.createdDay} days in storage · loses quality every day</small>
+      <small className="muted">Quality {Math.round(b.quality)}/100 · {s.day - b.createdDay}d stored</small>
       <div className="decision three">
         {options.map(o => (
           <div key={o.id} className={o.locked ? 'locked' : ''}>
             <span>{o.label}</span><b>{money(o.net)}</b>
-            <small>{o.cost ? `Revenue ${money(o.revenue)} − cost ${money(o.cost)}` : 'No processing cost'} · Risk: {o.risk}</small>
+            <small>{o.cost ? `Net: ${money(o.revenue)} − ${money(o.cost)}` : 'Direct sale'} · {o.risk}</small>
             <small>{o.locked ?? o.detail}</small>
           </div>
         ))}
       </div>
       {open ? <ProcessForm batch={b} onDone={() => setOpen(false)} /> : (
-        <button className="action wide" onClick={() => setOpen(true)} disabled={rackSpaceKg(s) < 50}><strong>⚙ Process this batch</strong><small>{rackSpaceKg(s) < 50 ? 'Drying racks are full' : 'Choose how to wash, sort and slice'}</small></button>
+        <button className="action wide" onClick={() => setOpen(true)} disabled={rackSpaceKg(s) < 50}><strong>⚙ Process this batch</strong><small>{rackSpaceKg(s) < 50 ? 'Drying racks full' : 'Wash, sort & slice'}</small></button>
       )}
       <BuyerButtons batch={b} />
     </div>
@@ -221,13 +221,13 @@ function InputSuppliesShop() {
   const trendClass = trend === 'rising' ? 'warn' : trend === 'falling' ? 'good' : '';
 
   return (
-    <div className="input-shop" style={{ marginTop: 24, paddingTop: 16, borderTop: '1px solid var(--line)' }}>
-      <div className="batch-head">
-        <h4>Farm Inputs & Stockroom <Tip text="Purchase ginger setts and fertilizer ahead of time. Inputs are stored in the warehouse and automatically used when planting or fertilizing beds, avoiding emergency market price spikes." align="left" /></h4>
-        <small className={trendClass} style={{ fontSize: 11 }}>Price trend: <b>{trendLabel}</b></small>
+    <div className="input-shop" style={{ marginTop: 24, paddingTop: 18, borderTop: '1px solid var(--line)' }}>
+      <div className="batch-head" style={{ marginBottom: 10 }}>
+        <h4 style={{ fontSize: 16 }}>Farm Inputs & Stockroom <Tip text="Purchase ginger setts and fertilizer ahead of time. Inputs are stored in the warehouse and automatically used when planting or fertilizing beds, avoiding emergency market price spikes." align="left" /></h4>
+        <small className={trendClass} style={{ fontSize: 13, fontWeight: 600 }}>Price trend: <b>{trendLabel}</b></small>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 10, marginTop: 8 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 14, marginTop: 10 }}>
         {SHOP_ITEMS.map(item => {
           const qty = quantities[item.id] ?? 5;
           const plan = previewPurchase(s, item.id, qty);
@@ -235,52 +235,52 @@ function InputSuppliesShop() {
           const unitPrice = getInputUnitPrice(s, item.id);
 
           return (
-            <div key={item.id} className="batch" style={{ margin: 0, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+            <div key={item.id} className="batch" style={{ margin: 0, padding: 16, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
               <div>
-                <div className="batch-head">
-                  <b>{item.icon} {item.label}</b>
-                  <span className="grade-wrap" style={{ fontSize: 11, color: 'var(--muted)' }}>
-                    In stock: <strong style={{ color: currentStock > 0 ? 'var(--green)' : 'var(--muted)' }}>{currentStock} units</strong>
+                <div className="batch-head" style={{ marginBottom: 6 }}>
+                  <b style={{ fontSize: 15 }}>{item.icon} {item.label}</b>
+                  <span className="grade-wrap" style={{ fontSize: 12.5, color: 'var(--muted)' }}>
+                    In stock: <strong style={{ color: currentStock > 0 ? 'var(--green)' : 'var(--muted)', fontWeight: 700 }}>{currentStock} units</strong>
                   </span>
                 </div>
-                <small className="muted" style={{ display: 'block', marginBottom: 8 }}>
+                <small className="muted" style={{ display: 'block', marginBottom: 10, fontSize: 13 }}>
                   {item.blurb} · <b>{money(unitPrice)}</b>/unit today
                 </small>
 
-                <div className="station-label" style={{ fontSize: 11, marginBottom: 4 }}>Order size:</div>
-                <div className="seg" style={{ display: 'flex', gap: 4, marginBottom: 10 }}>
+                <div className="station-label" style={{ fontSize: 12.5, marginBottom: 6, fontWeight: 600 }}>Order size:</div>
+                <div className="seg" style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
                   {BUNDLE_OPTIONS.map(b => (
                     <button
                       key={b}
                       className={b === qty ? 'on' : ''}
                       onClick={() => setQuantities({ ...quantities, [item.id]: b })}
-                      style={{ flex: 1, padding: '4px 6px', fontSize: 11 }}
+                      style={{ flex: 1, padding: '7px 8px', fontSize: 12.5, fontWeight: 600 }}
                     >
                       {b} {b >= 25 ? '(-10%)' : b >= 10 ? '(-6%)' : b >= 5 ? '(-3%)' : ''}
                     </button>
                   ))}
                 </div>
 
-                <div className="preview" style={{ marginBottom: 10, padding: 8, background: '#121913', borderRadius: 8, fontSize: 12 }}>
+                <div className="preview" style={{ marginBottom: 12, padding: '10px 14px', background: 'var(--panel2)', border: '1px solid var(--green-border-subtle)', borderRadius: 10, fontSize: 13.5 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                     <span>Quantity & weight:</span>
                     <b>{qty} units ({plan.weightKg} kg)</b>
                   </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6 }}>
                     <span>Total cost:</span>
-                    <b>{money(plan.totalCost)} {plan.discountRate > 0 && <small style={{ color: 'var(--green)' }}>(-{Math.round(plan.discountRate * 100)}%)</small>}</b>
+                    <b>{money(plan.totalCost)} {plan.discountRate > 0 && <small style={{ color: 'var(--green)', fontWeight: 700 }}>(-{Math.round(plan.discountRate * 100)}%)</small>}</b>
                   </div>
                 </div>
               </div>
 
               <div>
-                {plan.locked && <div className="alert" style={{ margin: '4px 0', fontSize: 11 }}>{plan.locked}</div>}
-                {!plan.locked && !plan.fits && <div className="alert" style={{ margin: '4px 0', fontSize: 11 }}>Warehouse full (+{plan.weightKg} kg exceeds free space)</div>}
-                {!plan.locked && plan.fits && !plan.canAfford && <div className="alert" style={{ margin: '4px 0', fontSize: 11 }}>Need {money(plan.totalCost)} (short by {money(plan.totalCost - s.cash)})</div>}
+                {plan.locked && <div className="alert" style={{ margin: '6px 0', fontSize: 12.5 }}>{plan.locked}</div>}
+                {!plan.locked && !plan.fits && <div className="alert" style={{ margin: '6px 0', fontSize: 12.5 }}>Warehouse full (+{plan.weightKg} kg exceeds free space)</div>}
+                {!plan.locked && plan.fits && !plan.canAfford && <div className="alert" style={{ margin: '6px 0', fontSize: 12.5 }}>Need {money(plan.totalCost)} (short by {money(plan.totalCost - s.cash)})</div>}
 
                 <button
                   className="action primary wide"
-                  style={{ width: '100%', marginTop: 6 }}
+                  style={{ width: '100%', marginTop: 8, padding: '10px 16px', fontSize: 14 }}
                   disabled={!!plan.locked || !plan.fits || !plan.canAfford}
                   onClick={() => s.buyInput(item.id, qty)}
                 >
