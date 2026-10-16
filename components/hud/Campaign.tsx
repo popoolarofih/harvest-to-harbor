@@ -34,6 +34,11 @@ export function MissionCard() {
     <div className="mission campaign">
       <span className="mission-step">Mission {n}/{s.missions.length}{m.npc ? ` · ${NPCS[m.npc].name}` : ''}</span>
       <b>{m.title}</b>
+      {showBar && (
+        <span className="compact-prog-badge">
+          ({Math.round(m.progress)}/{m.target})
+        </span>
+      )}
       <p>{m.description}</p>
       {showBar && <>
         <div className="progress"><i style={{ width: `${(m.progress / m.target) * 100}%` }} /></div>

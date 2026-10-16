@@ -24,7 +24,7 @@ export function SaveIndicator() {
   const { state, savedAt } = useSaveStatus();
   const now = useClock();
   const text = state === 'pending' ? 'Saving…' : state === 'error' ? 'Save failed' : savedLabel(savedAt, now);
-  return <div className={`save-ind ${state}`} role="status" aria-live="polite" data-testid="save-status"><i aria-hidden />{text}</div>;
+  return <div className={`save-ind ${state}`} role="status" aria-live="polite" data-testid="save-status"><i aria-hidden /><span className="save-text">{text}</span></div>;
 }
 
 /** Explains a failed save until the next one succeeds. */

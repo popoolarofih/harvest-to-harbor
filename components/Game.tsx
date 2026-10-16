@@ -134,6 +134,8 @@ function Hud() {
   const [menu, setMenu] = useState(false);
   const [confirmNew, setConfirmNew] = useState(false);
   const [bulkModal, setBulkModal] = useState(false);
+  const [cleanView, setCleanView] = useState(false);
+  const [opsCollapsed, setOpsCollapsed] = useState(false);
 
   useEffect(() => {
     if (typeof window !== 'undefined' && window.innerWidth <= 768) {
@@ -155,7 +157,16 @@ function Hud() {
   const tutorialOn = s.tutorial.status === 'active';
 
   return (
-    <div className="hud">
+    <div className={`hud ${cleanView ? 'zen-mode' : ''}`}>
+      {cleanView && (
+        <button
+          className="zen-floating-toggle"
+          onClick={() => setCleanView(false)}
+          aria-label="Exit Zen view and show HUD controls"
+        >
+          👁️ Show Controls
+        </button>
+      )}
       <header className="topbar">
         <div className="brand brand-btn" role="button" tabIndex={0} onClick={s.openProfile} title="Personalize your farm and farmer">
           <small>{s.profile.emblem} {s.profile.farmName}</small>
@@ -170,14 +181,34 @@ function Hud() {
           <div className="stat" title={titleFor(s.level)}><span>Level <Tip text={TIPS.level} align="right" /></span><b>{s.level}</b></div>
         </div>
         <div className="top-right">
+          <button
+            className="zen-btn"
+            onClick={() => setCleanView(true)}
+            aria-label="Clean view (Hide HUD)"
+            title="Clean View / Full Screen Farm"
+          >
+            🌿
+          </button>
           <SaveIndicator />
           <button className="menu-btn" onClick={() => setMenu(true)} aria-label="Menu" title="Menu">☰</button>
         </div>
       </header>
       <SaveErrorBanner />
 
-      <section className={`side ${compact ? 'compact' : ''} ${tutorialOn ? 'with-tutorial' : ''}`}>
-        <button className="collapse" onClick={() => setCompact(!compact)} aria-label={compact ? 'Expand panel' : 'Collapse panel'}>{compact ? '▸' : '▾'}</button>
+      <section
+        className={`side ${compact ? 'compact' : ''} ${tutorialOn ? 'with-tutorial' : ''}`}
+        onClick={compact ? () => setCompact(false) : undefined}
+      >
+        <button
+          className="collapse"
+          onClick={(e) => {
+            e.stopPropagation();
+            setCompact(!compact);
+          }}
+          aria-label={compact ? 'Expand panel' : 'Collapse panel'}
+        >
+          {compact ? '▸' : '✕'}
+        </button>
         <div className="eyebrow" onClick={() => setCompact(!compact)} style={{ cursor: 'pointer' }}>Season 01 · {s.profile.farmerName} · Kafanchan</div>
         <XpBar />
         <TutorialCard />
@@ -197,24 +228,43 @@ function Hud() {
         <div className="weather"><span>FRESH</span><b>{money(s.market.fresh)}/kg</b><span>DRIED</span><b>{money(s.market.dried)}/kg</b></div>
       </section>
 
-      <aside className="hud-right">
+      <aside className={`hud-right ${opsCollapsed ? 'ops-min' : ''}`}>
         <section className="actions">
           {s.selectedPlot !== null ? <PlotPanel /> : s.tankOpen ? <TankCard /> : s.talkingTo ? <NpcCard /> : (
-            <div className="card">
-              <div className="eyebrow">Operations</div>
-              <h3>Run the farm</h3>
-              <p className="muted small">
+            <div className={`card operations-card ${opsCollapsed ? 'minimized' : ''}`}>
+              <div className="mobile-ops-header mobile-only">
+                <span className="ops-title">Operations</span>
+                <button
+                  type="button"
+                  className="ops-min-btn"
+                  onClick={() => setOpsCollapsed(!opsCollapsed)}
+                  aria-label={opsCollapsed ? 'Expand operations' : 'Minimize operations'}
+                >
+                  {opsCollapsed ? '▲ Actions' : '▼ Hide'}
+                </button>
+              </div>
+              <div className="eyebrow desktop-only">Operations</div>
+              <h3 className="desktop-only">Run the farm</h3>
+              <p className="muted small desktop-only">
                 <span className="hint-mouse"><kbd>WASD</kbd> Move · <kbd>E</kbd> Interact · <kbd>Q</kbd>/<kbd>R</kbd> Turn · Scroll Zoom</span>
                 <span className="hint-touch">Tap to walk & interact · Pinch zoom</span>
               </p>
               <div className="action-grid">
                 <button className="action primary" data-tut="end-day" onClick={s.advance}><strong>🌙 End day</strong><small>{nightly > 0 ? `${money(nightly)} nightly costs` : 'Advance day'}</small></button>
-                <button className="action" onClick={s.pump} disabled={s.water >= tankCapacity(s)}><strong>⛽ Pump borehole</strong><small>Fill water tank</small></button>
-                <button className="action" onClick={() => setPanel('storage')}><strong>📦 Storage</strong><small>{Math.round(freshKg)} kg fresh · {Math.round(driedKg)} kg dried</small></button>
-                <button className="action" onClick={() => setPanel('business')}><strong>🏗 Business</strong><small>Workers, loans & upgrades</small></button>
-                <button className="action" onClick={() => setBulkModal(true)}><strong>🚜 Bulk operations</strong><small>Field automation</small></button>
+                <button className="action" onClick={s.pump} disabled={s.water >= tankCapacity(s)}><strong>⛽ Pump borehole</strong><small className="desktop-only">Fill water tank</small></button>
+                <button className="action mobile-hide-dup" onClick={() => setPanel('storage')}><strong>📦 Storage</strong><small>{Math.round(freshKg)} kg fresh · {Math.round(driedKg)} kg dried</small></button>
+                <button className="action mobile-hide-dup" onClick={() => setPanel('business')}><strong>🏗 Business</strong><small>Workers, loans & upgrades</small></button>
+                <button className="action" onClick={() => setBulkModal(true)}><strong>🚜 Bulk operations</strong><small className="desktop-only">Field automation</small></button>
               </div>
-              {ready.length > 0 && <div className="alert good">Ready to harvest: {ready.map(plotName).join(', ')}</div>}
+              {ready.length > 0 && (
+                <div
+                  className="alert good harvest-chip"
+                  onClick={() => s.select(ready[0].id)}
+                  title="Click to view ready plot"
+                >
+                  🌾 Ready: {ready.map(plotName).join(', ')}
+                </div>
+              )}
             </div>
           )}
         </section>
