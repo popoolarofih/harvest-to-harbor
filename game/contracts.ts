@@ -1,5 +1,6 @@
 import {
-  BRAND_PREMIUM, CARGO_INSURANCE_RATE, DEMURRAGE_PER_DAY, ENERGY, EXPORT, EXPORT_FEES, GRADE_MULT, HAULAGE, PORT_DAYS, ROAD_DAYS,
+  BRAND_PREMIUM, CARGO_INSURANCE_RATE, COMPANY_TRUCK, DEMURRAGE_PER_DAY, ENERGY, EXPORT, EXPORT_FEES, EXPORT_OFFICE_FEE_DISCOUNT, GRADE_MULT, HAULAGE, PACKAGING,
+  PORT_DAYS, ROAD_DAYS,
   SAFE_MOISTURE, SEA_DAMAGE_CHANCE, TRADE_BUYERS, type TradeBuyer,
 } from './config';
 import { isUnlocked, lockedReason } from './levels';
@@ -10,6 +11,7 @@ import type { Batch, Contract, GameState, Haulage, LogLine, Product, QualityGrad
 import { calculateCrewPerks } from './workers';
 import { recordLedgerEntry } from './ledger';
 import { checkPrestigeAchievements, recordGoalProgress } from './endgame';
+import { packagingCost } from './economy';
 
 export const buyerOf = (c: Pick<Contract, 'buyerId'>): TradeBuyer => TRADE_BUYERS.find(b => b.id === c.buyerId)!;
 export const isExport = (c: Pick<Contract, 'buyerId'>) => !buyerOf(c).domestic;
@@ -186,16 +188,26 @@ export function declineContract(s: GameState, id: number): GameState {
 
 export interface DispatchCosts { haulage: number; exportFees: number; insurance: number; total: number; }
 
-export function dispatchCosts(s: GameState, c: Contract, haulage: Haulage, insured: boolean): DispatchCosts {
+/** Haulage option as the player sees it: with a company truck, "standard" means your own lorry. */
+export function haulageInfo(s: Pick<GameState, 'upgrades'>, haulage: Haulage) {
   const h = HAULAGE[haulage];
+  if (haulage !== 'standard' || !s.upgrades.companyTruck) return { label: h.label as string, base: h.base, perKg: h.perKg, breakdownChance: h.breakdownChance, blurb: h.blurb as string };
+  return {
+    label: 'Company truck', base: Math.round(h.base * COMPANY_TRUCK.baseMult), perKg: Math.round(h.perKg * COMPANY_TRUCK.perKgMult),
+    breakdownChance: h.breakdownChance * COMPANY_TRUCK.breakdownMult, blurb: 'Your own lorry and driver: cheaper and well maintained.',
+  };
+}
+
+export function dispatchCosts(s: GameState, c: Contract, haulage: Haulage, insured: boolean): DispatchCosts {
+  const h = haulageInfo(s, haulage);
   const road = Math.round(h.base + h.perKg * c.kg);
-  const exportFees = isExport(c) ? EXPORT_FEES : 0;
+  const exportFees = isExport(c) ? Math.round(EXPORT_FEES * (s.upgrades.exportOffice ? 1 - EXPORT_OFFICE_FEE_DISCOUNT : 1)) : 0;
   const insurance = insured ? Math.round(contractValue(s, c) * CARGO_INSURANCE_RATE) : 0;
   return { haulage: road, exportFees, insurance, total: road + exportFees + insurance };
 }
 
 /** Load the truck: take eligible stock off the shelf and start the journey. */
-export function dispatchContract(s: GameState, id: number, haulage: Haulage = 'standard', insured = false): GameState {
+export function dispatchContract(s: GameState, id: number, haulage: Haulage = 'standard', insured = false, byCrew = false): GameState {
   const c = s.contracts.find(x => x.id === id);
   if (!c || c.status !== 'active') return fail(s, 'That contract is not open.');
   if (haulage === 'fleet' && !isUnlocked(s, 'fleet')) return fail(s, `Chinedu's fleet: ${lockedReason(s, 'fleet')}.`);
@@ -209,7 +221,7 @@ export function dispatchContract(s: GameState, id: number, haulage: Haulage = 's
   const have = stock.reduce((sum, b) => sum + b.kg, 0);
   if (have < c.kg) return fail(s, `You have ${Math.round(have)} of ${c.kg} kg that meets this contract.`);
   const costs = dispatchCosts(s, c, haulage, insured);
-  const why = blocked(s, { energy: ENERGY.ship, cash: costs.total });
+  const why = blocked(s, { energy: byCrew ? 0 : ENERGY.ship, cash: costs.total });
   if (why) return fail(s, why);
 
   // Take the best stock first, splitting the last batch if needed.
@@ -232,9 +244,9 @@ export function dispatchContract(s: GameState, id: number, haulage: Haulage = 's
     id: s.nextId, contractId: c.id, kg: c.kg, grade: worst, stage: 'road',
     daysLeft: exportOrder ? ROAD_DAYS : 2, stageDays: exportOrder ? ROAD_DAYS : 2,
     haulage, insured, damage: 0, dispatchedDay: s.day, arrivedDay: null, payDay: null, payout: null,
-    events: [{ day: s.day, text: `Loaded ${c.kg.toLocaleString()} kg at the farm. ${HAULAGE[haulage].label} heading for ${exportOrder ? 'Lagos' : buyerOf(c).port}.`, severity: 'info' }],
+    events: [{ day: s.day, text: `Loaded ${c.kg.toLocaleString()} kg at the farm. ${haulageInfo(s, haulage).label} heading for ${exportOrder ? 'Lagos' : buyerOf(c).port}.`, severity: 'info' }],
   };
-  const spent = spend(s, costs.total, ENERGY.ship);
+  const spent = spend(s, costs.total, byCrew ? 0 : ENERGY.ship);
   let next: GameState = {
     ...spent, batches, nextId: s.nextId + 1, shipments: [...s.shipments, shipment],
     contracts: s.contracts.map(x => (x.id === id ? { ...x, status: 'shipping' as const } : x)),
@@ -253,6 +265,111 @@ export function dispatchContract(s: GameState, id: number, haulage: Haulage = 's
     });
   }
   return addXp(log({ ...next, toast: `The truck is on its way${exportOrder ? ' to Lagos' : ''} with ${c.kg.toLocaleString()} kg for ${buyerOf(c).name}.` }, { text: `Dispatched ${c.kg.toLocaleString()} kg to ${buyerOf(c).name} (${money(costs.total)} logistics).`, severity: 'good' }), 80);
+}
+
+// ---- Export made easy: readiness checklist, repacking and one-click shipping ----
+
+export interface ReadinessIssue { kind: 'packaging' | 'damp' | 'grade' | 'soiled' | 'short'; kg: number; text: string; fix: string }
+export interface ExportReadiness {
+  needKg: number;
+  readyKg: number;
+  /** Kg that only needs moving into sealed bags to qualify (and that this order needs). */
+  repackKg: number;
+  repackCost: number;
+  /** Can "Prepare & ship" fill the order (after repacking) right now, cash aside? */
+  canFill: boolean;
+  issues: ReadinessIssue[];
+}
+
+/** Stock of the right product that isn't promised to another contract. */
+function candidateBatches(s: GameState, c: Contract) {
+  return s.batches.filter(b => (!b.reservedFor || b.reservedFor === c.id) && (c.campaign ? b.product === 'dried' || b.product === 'powder' : b.product === c.product));
+}
+
+/** Batches that qualify once they are in sealed bags (export only). */
+function repackable(s: GameState, c: Contract): Batch[] {
+  if (!isExport(c)) return [];
+  return candidateBatches(s, c).filter(b =>
+    b.packaging !== 'sealed' && !b.soiled && b.moisture <= SAFE_MOISTURE && gradeAtLeast(gradeForBatch({ ...b, packaging: 'sealed' }), c.minGrade));
+}
+
+/** What stands between your warehouse and this contract, in plain language. */
+export function exportReadiness(s: GameState, c: Contract): ExportReadiness {
+  const ready = eligibleKg(s, c);
+  const repack = repackable(s, c).sort((a, b) => b.quality - a.quality);
+  let need = Math.max(0, c.kg - ready), repackKg = 0, repackCost = 0;
+  for (const b of repack) {
+    if (need <= 0) break;
+    const kg = Math.min(b.kg, need);
+    repackKg += kg; repackCost += packagingCost(s, kg, 'sealed'); need -= kg;
+  }
+  const exportOrder = isExport(c);
+  const eligibleIds = new Set(eligibleBatches(s, c).map(b => b.id)), repackIds = new Set(repack.map(b => b.id));
+  const rest = candidateBatches(s, c).filter(b => !eligibleIds.has(b.id) && !repackIds.has(b.id));
+  const sum = (bs: Batch[]) => Math.round(bs.reduce((t, b) => t + b.kg, 0));
+  const damp = rest.filter(b => b.moisture > SAFE_MOISTURE);
+  const soiled = rest.filter(b => b.moisture <= SAFE_MOISTURE && exportOrder && b.soiled);
+  const lowGrade = rest.filter(b => b.moisture <= SAFE_MOISTURE && !(exportOrder && b.soiled));
+  const issues: ReadinessIssue[] = [];
+  const allRepack = sum(repack);
+  if (allRepack) issues.push({ kind: 'packaging', kg: allRepack, text: `${allRepack.toLocaleString()} kg is in ${PACKAGING.bulk.label.toLowerCase()}. Export buyers only take ${PACKAGING.sealed.label.toLowerCase()}.`, fix: 'Prepare & ship moves what this order needs into sealed bags for you.' });
+  if (damp.length) issues.push({ kind: 'damp', kg: sum(damp), text: `${sum(damp).toLocaleString()} kg is above ${SAFE_MOISTURE}% moisture.`, fix: 'Damp ginger grows mould at sea. Dry it longer on the racks, and bag it sealed so it stays dry.' });
+  if (soiled.length) issues.push({ kind: 'soiled', kg: sum(soiled), text: `${sum(soiled).toLocaleString()} kg still has soil on it from a quick rinse.`, fix: 'Use a thorough wash before drying: importers reject foreign matter.' });
+  if (lowGrade.length) issues.push({ kind: 'grade', kg: sum(lowGrade), text: `${sum(lowGrade).toLocaleString()} kg grades below ${c.minGrade}.`, fix: 'Sell it locally. For higher grades, harvest on time, sort strictly and slice before drying.' });
+  const short = c.kg - ready - repackKg;
+  if (short > 0) issues.push({ kind: 'short', kg: Math.round(short), text: `You need ${Math.round(short).toLocaleString()} kg more qualifying ${contractProductLabel(c)}.`, fix: `Due day ${c.deadlineDay}: ${c.deadlineDay - s.day} days to harvest, process and bag it.` });
+  return { needKg: c.kg, readyKg: Math.round(ready), repackKg: Math.round(repackKg), repackCost: Math.round(repackCost), canFill: short <= 0, issues };
+}
+
+/** Move otherwise-qualifying stock into sealed bags until the contract can be filled. */
+export function repackForContract(s: GameState, id: number): GameState {
+  const c = s.contracts.find(x => x.id === id && x.status === 'active');
+  if (!c) return fail(s, 'That contract is not open.');
+  let need = c.kg - eligibleKg(s, c);
+  if (need <= 0) return s;
+  let next = s, cost = 0, kgDone = 0;
+  for (const b of repackable(s, c).sort((a, b2) => b2.quality - a.quality)) {
+    if (need <= 0) break;
+    const kg = Math.min(b.kg, need);
+    const price = packagingCost(next, kg, 'sealed');
+    if (next.cash < price) break;
+    const split = kg < b.kg;
+    const resealed: Batch = { ...b, kg, packaging: 'sealed', id: split ? next.nextId : b.id };
+    const batches = split
+      ? [...next.batches.map(x => (x.id === b.id ? { ...x, kg: x.kg - kg } : x)), resealed]
+      : next.batches.map(x => (x.id === b.id ? resealed : x));
+    next = { ...spend(next, price), batches, nextId: split ? next.nextId + 1 : next.nextId };
+    cost += price; kgDone += kg; need -= kg;
+  }
+  if (!kgDone) return fail(s, 'Not enough cash to buy sealed bags.');
+  next = recordLedgerEntry(next, {
+    id: `repack-${c.id}-${s.day}-${s.nextId}`, day: s.day, category: 'processingPackaging', amount: cost, referenceId: c.id,
+    description: `Repacked ${Math.round(kgDone)} kg into sealed export bags for contract #${c.id}`,
+  });
+  return log({ ...next, toast: `Repacked ${Math.round(kgDone).toLocaleString()} kg into sealed bags (${money(cost)}).` },
+    { text: `Repacked ${Math.round(kgDone).toLocaleString()} kg into sealed export bags for ${buyerOf(c).name} (${money(cost)}).`, severity: 'info' });
+}
+
+/** The haulage and insurance a sensible exporter would pick today. */
+export function recommendedDispatch(s: GameState, c: Contract): { haulage: Haulage; insured: boolean } {
+  const haulage: Haulage = !s.upgrades.companyTruck && isUnlocked(s, 'fleet') ? 'fleet' : 'standard';
+  return { haulage, insured: isExport(c) && isUnlocked(s, 'cargoInsurance') };
+}
+
+/** One click: repack what's needed, then load the truck with the recommended haulage. */
+export function quickShip(s: GameState, id: number, byCrew = false): GameState {
+  const c = s.contracts.find(x => x.id === id && x.status === 'active');
+  if (!c) return fail(s, 'That contract is not open.');
+  const ready = exportReadiness(s, c);
+  if (!ready.canFill) return fail(s, ready.issues.find(i => i.kind === 'short')?.text ?? 'Not enough qualifying stock yet.');
+  const { haulage, insured } = recommendedDispatch(s, c);
+  const costs = dispatchCosts(s, c, haulage, insured);
+  if (s.cash < costs.total + ready.repackCost) return fail(s, `You need ${money(costs.total + ready.repackCost)} for bags and logistics.`);
+  if (!byCrew && s.energy < ENERGY.ship) return fail(s, 'Not enough energy today. Hire workers or advance the day.');
+  const packed = ready.repackKg > 0 ? repackForContract(s, id) : s;
+  const shipped = dispatchContract(packed, id, haulage, insured, byCrew);
+  // If loading fails, undo the repacking too: nothing is half-done.
+  return shipped.contracts.find(x => x.id === id)?.status === 'shipping' ? shipped : { ...s, toast: shipped.toast };
 }
 
 const STOPS = ['Kaduna', 'Abuja', 'Lokoja', 'Ibadan'];
@@ -291,7 +408,7 @@ export function tickShipments(s: GameState, rng: Rng, lines: LogLine[]): GameSta
     const perks = calculateCrewPerks(s.crew ?? []);
     if (sh.stage === 'road') {
       const roadBenefitMult = (s.coopRoadBenefitDays ?? 0) > 0 ? 0.4 : 1.0;
-      const breakdownChance = HAULAGE[sh.haulage].breakdownChance * perks.breakdownChanceMult * roadBenefitMult;
+      const breakdownChance = haulageInfo(s, sh.haulage).breakdownChance * perks.breakdownChanceMult * roadBenefitMult;
       if (rng.chance(breakdownChance)) {
         sh.daysLeft += 2;
         charge(40_000, 'Road breakdown repairs');

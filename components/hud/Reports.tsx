@@ -1,5 +1,5 @@
 'use client';
-import { WEATHER_INFO, money } from '../../game/simulation';
+import { WEATHER_INFO, lessonForDay, money } from '../../game/simulation';
 import { useGameStore } from '../../stores/gameStore';
 
 /** "QUALITY INSPECTION" card: teaches through consequences instead of a bare "bad drying" message. */
@@ -27,7 +27,8 @@ export function MorningReport() {
   const r = s.lastReport;
   if (!r || s.reportSeenDay >= r.day || s.lastInspection) return null;
   const a = r.automation;
-  const automated = a.irrigatedPlots || a.pumpedLitres || a.fertilizedPlots || a.coveredRacks || a.irrigationNeedsRepair || (a.plantedPlots ?? 0) > 0 || (a.wateredPlots ?? 0) > 0 || (a.treatedPlots ?? 0) > 0 || (a.gapFilledPlots ?? 0) > 0 || (a.harvestedPlots ?? 0) > 0 || (a.openedRacks ?? 0) > 0 || (a.baggedRacks ?? 0) > 0;
+  const automated = a.irrigatedPlots || a.pumpedLitres || a.fertilizedPlots || a.coveredRacks || a.irrigationNeedsRepair || (a.plantedPlots ?? 0) > 0 || (a.wateredPlots ?? 0) > 0 || (a.treatedPlots ?? 0) > 0 || (a.gapFilledPlots ?? 0) > 0 || (a.harvestedPlots ?? 0) > 0 || (a.openedRacks ?? 0) > 0 || (a.baggedRacks ?? 0) > 0 || (a.milledKg ?? 0) > 0 || (a.shippedContracts ?? 0) > 0;
+  const lesson = lessonForDay(r.day);
   return (
     <div className="report card">
       <div className="eyebrow">Morning report · day {r.day}</div>
@@ -41,13 +42,17 @@ export function MorningReport() {
         {(a.wateredPlots ?? 0) > 0 && <span>Watered {a.wateredPlots} bed{a.wateredPlots! > 1 ? 's' : ''}</span>}
         {a.fertilizedPlots > 0 && <span>Fertilized {a.fertilizedPlots} bed{a.fertilizedPlots > 1 ? 's' : ''} ({money(a.fertilizerCost)})</span>}
         {(a.gapFilledPlots ?? 0) > 0 && <span>Gap-filled {a.gapFilledPlots} bed{a.gapFilledPlots! > 1 ? 's' : ''}</span>}
-        {(a.harvestedPlots ?? 0) > 0 && <span>Harvested {a.harvestedPlots} bed{a.harvestedPlots! > 1 ? 's' : ''}</span>}
+        {(a.harvestedPlots ?? 0) > 0 && <span className="good">🧺 Crew harvested {a.harvestedPlots} bed{a.harvestedPlots! > 1 ? 's' : ''}: {Math.round(a.harvestedKg ?? 0).toLocaleString()} kg into the warehouse</span>}
+        {(a.milledKg ?? 0) > 0 && <span>Milled {Math.round(a.milledKg!).toLocaleString()} kg powder</span>}
+        {(a.shippedContracts ?? 0) > 0 && <span className="good">🚛 Export office shipped {a.shippedContracts} contract{a.shippedContracts! > 1 ? 's' : ''}</span>}
         {a.coveredRacks > 0 && <span>Covered {a.coveredRacks} rack{a.coveredRacks > 1 ? 's' : ''}</span>}
         {(a.openedRacks ?? 0) > 0 && <span>Opened {a.openedRacks} rack{a.openedRacks! > 1 ? 's' : ''}</span>}
         {(a.baggedRacks ?? 0) > 0 && <span>Bagged {a.baggedRacks} rack{a.baggedRacks! > 1 ? 's' : ''}</span>}
         {a.irrigationNeedsRepair && <span className="warn">Drip lines need service</span>}
       </div>}
+      {(a.blocked ?? []).length > 0 && <ul className="report-blocked">{a.blocked!.map(b => <li key={b} className="warning">{b}</li>)}</ul>}
       <ul>{r.lines.slice(1).map((l, i) => <li key={i} className={l.severity}>{l.text}</li>)}</ul>
+      <div className="lesson report-lesson"><b>📖 Farm lesson · {lesson.topic}</b><p>{lesson.text}</p></div>
       {(r.wages > 0 || r.insurance > 0) && <small className="muted">Paid {money(r.wages)} wages{r.insurance ? ` and ${money(r.insurance)} insurance` : ''} last night.</small>}
       <button className="action primary" onClick={s.dismissReport}><strong>Start the day</strong></button>
     </div>

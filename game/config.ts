@@ -1,4 +1,4 @@
-import type { CutStyle, IssueKind, Packaging, PlayerProfile, PrepMethod, Product, QualityGrade, SeedTier, SortLevel, ThemeId, WashMethod, Weather } from './types';
+import type { CompoundSiteId, CutStyle, IssueKind, Packaging, PlayerProfile, PrepMethod, Product, QualityGrade, SeedTier, SortLevel, ThemeId, WashMethod, Weather } from './types';
 export type { PlayerProfile, ThemeId } from './types';
 
 // Values are tuned for gameplay and loosely anchored to Southern Kaduna ginger farming.
@@ -50,6 +50,8 @@ export const HIRE_COST = 5_000;
 export const INSURANCE_PREMIUM = 2_500;
 export const INSURANCE_COVER = 0.7;
 export const PLOTS_PER_FIELD_WORKER = 8;
+/** Ready beds one field worker lifts each morning by hand. A mechanical digger triples it. */
+export const HARVEST_BEDS_PER_WORKER = 6;
 /** Daily labour points per field worker. Ops cost their ENERGY value: 8 ridged plantings (6 + 2) per worker. */
 export const FIELD_LABOUR_POINTS = PLOTS_PER_FIELD_WORKER * (6 + 2);
 /** Dried kg one processing worker can feed through the factory mill per day. */
@@ -130,12 +132,81 @@ export const UPGRADES = {
   solarDryer: { label: 'Solar tunnel dryer', cost: 250_000, blurb: 'A plastic-covered drying tunnel: dries 30% faster and rain can no longer re-wet the racks.' },
   factory: { label: 'Processing Factory', cost: 900_000, blurb: 'A second drying line (double rack capacity) and a packaging line that cuts sealed-bag costs by 40%.' },
   land: { label: 'Lease another hectare', cost: 400_000, blurb: '+8 plots beside your field, on a long lease from the village.' },
+  solarPump: { label: 'Solar borehole pump', cost: 350_000, blurb: 'Panels drive the borehole pump: filling the tank no longer burns diesel, and fuel spikes stop hurting.' },
+  tractor: { label: 'Tractor & ridger', cost: 1_200_000, blurb: 'Field crews prepare and plant twice as many beds a day, and every bed costs 30% less to prepare.' },
+  digger: { label: 'Mechanical ginger digger', cost: 650_000, blurb: 'Lifts rhizomes without snapping them: +6% harvest weight, harvesting takes half the energy, and crews lift three times as many beds.' },
+  companyTruck: { label: 'Company truck', cost: 1_600_000, blurb: 'Your own lorry: haulage is about 40% cheaper and breaks down far less often.' },
+  exportOffice: { label: 'Export office & freight forwarder', cost: 900_000, blurb: 'A clerk handles documents and bookings: export paperwork fees are halved, and contracts can ship themselves once stock is ready.' },
 } as const;
 
 /** Daily running costs of equipment. */
-export const MAINTENANCE: Partial<Record<UpgradeId, number>> = { irrigation: 500, mill: 1_500, solarDryer: 400, factory: 2_500 };
+export const MAINTENANCE: Partial<Record<UpgradeId, number>> = {
+  irrigation: 500, mill: 1_500, solarDryer: 400, factory: 2_500, solarPump: 200, tractor: 1_800, digger: 600, companyTruck: 2_000, exportOffice: 2_500,
+};
+/** Equipment effects. */
+export const TRACTOR_PREP_DISCOUNT = 0.3;
+export const DIGGER_YIELD_BONUS = 0.06;
+export const COMPANY_TRUCK = { baseMult: 0.5, perKgMult: 0.7, breakdownMult: 0.3 };
+export const EXPORT_OFFICE_FEE_DISCOUNT = 0.5;
 export const LAND_PLOTS_PER_LEASE = 8;
 export const MAX_LAND_LEASES = 1;
+/** Hectares that can be leased beside each bought compound (it has no buildings in the way). */
+export const MAX_COMPOUND_LEASES = 2;
+
+// ---- More farms: compounds bought away from home ----
+export interface CompoundSite {
+  id: CompoundSiteId;
+  name: string;
+  /** One-letter prefix for bed names, e.g. "K-A1". */
+  code: string;
+  place: string;
+  cost: number;
+  /** Caretaker, security and trucking harvest back to the main warehouse, per day. */
+  upkeep: number;
+  minLevel: number;
+  blurb: string;
+  lesson: string;
+  /** Terrain of rows A-D, like the home farm's rows. */
+  rows: { drainage: number; fertility: number; moisture: number; organicMatter: number }[];
+  /** Ground colour of the site in the 3D world. */
+  ground: string;
+}
+export const COMPOUND_SITES: CompoundSite[] = [
+  {
+    id: 'kachia', name: 'Kachia Valley Farm', code: 'K', place: 'Kachia', cost: 2_500_000, upkeep: 3_000, minLevel: 10, ground: '#5f7f3a',
+    blurb: 'Low, fertile river-valley land. Big yields, but the soil stays wet: ridge every bed or rot will find you.',
+    lesson: 'Valley bottoms collect water and nutrients. Fertile soil grows big rhizomes, but waterlogged roots are where soft rot starts.',
+    rows: [
+      { drainage: 0.55, fertility: 66, moisture: 55, organicMatter: 44 },
+      { drainage: 0.45, fertility: 70, moisture: 60, organicMatter: 46 },
+      { drainage: 0.35, fertility: 75, moisture: 65, organicMatter: 48 },
+      { drainage: 0.25, fertility: 80, moisture: 70, organicMatter: 50 },
+    ],
+  },
+  {
+    id: 'zonkwa', name: 'Zonkwa Ridge Farm', code: 'Z', place: 'Zonkwa', cost: 3_500_000, upkeep: 4_000, minLevel: 16, ground: '#8a7a45',
+    blurb: 'Free-draining upland. Rot almost never takes hold, but the soil is lean and dries out fast: bring fertilizer and water.',
+    lesson: 'Sandy upland soil drains well, which keeps rhizomes healthy, but nutrients wash through it. Compost and fertilizer pay off here.',
+    rows: [
+      { drainage: 0.9, fertility: 40, moisture: 30, organicMatter: 26 },
+      { drainage: 0.85, fertility: 44, moisture: 34, organicMatter: 28 },
+      { drainage: 0.8, fertility: 48, moisture: 38, organicMatter: 30 },
+      { drainage: 0.72, fertility: 54, moisture: 42, organicMatter: 32 },
+    ],
+  },
+  {
+    id: 'jos', name: 'Jos Plateau Estate', code: 'J', place: 'Jos', cost: 5_500_000, upkeep: 6_000, minLevel: 24, ground: '#4f7a4a',
+    blurb: 'Cool, high plateau with deep, balanced soil. The best all-round land in the game, priced like it.',
+    lesson: 'Altitude means cooler nights and less disease pressure. Balanced drainage and fertility make this premium ginger country.',
+    rows: [
+      { drainage: 0.75, fertility: 62, moisture: 46, organicMatter: 45 },
+      { drainage: 0.7, fertility: 65, moisture: 48, organicMatter: 47 },
+      { drainage: 0.62, fertility: 68, moisture: 52, organicMatter: 49 },
+      { drainage: 0.55, fertility: 72, moisture: 56, organicMatter: 52 },
+    ],
+  },
+];
+export const compoundSite = (id: CompoundSiteId) => COMPOUND_SITES.find(c => c.id === id)!;
 export const FACTORY_SEALED_DISCOUNT = 0.4;
 
 // ---- Money ----

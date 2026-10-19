@@ -3,7 +3,7 @@ import { create } from 'zustand';
 import { restoreGame, type SaveFile, type SaveMeta } from '../game/save';
 import * as sim from '../game/simulation';
 import { TUTORIAL_START, signalsBetween, skipStep, stepTutorial, type TutorialProgress } from '../game/tutorial';
-import type { AutomationSettings, CropType, GameState, Haulage, Packaging, PrepChoices, PrepMethod, SeedTier } from '../game/types';
+import type { AutomationSettings, CompoundSiteId, CropType, GameState, Haulage, Packaging, PrepChoices, PrepMethod, SeedTier } from '../game/types';
 import { playAction } from '../lib/audio';
 
 export type Panel = 'farm' | 'storage' | 'market' | 'trade' | 'business' | 'journal';
@@ -25,6 +25,8 @@ interface UiState {
   /** Saved with the game (see game/save.ts) so an unfinished tutorial resumes after a reload. */
   tutorial: TutorialProgress;
   customizingProfile: boolean;
+  /** Which farm the player is standing on: undefined = the home farm. Not saved; a reload starts at home. */
+  site: CompoundSiteId | undefined;
 }
 
 interface Actions {
@@ -87,6 +89,12 @@ interface Actions {
   releaseReservation: (contractId: number) => void;
   enterSandbox: () => void;
   respondCoop: (eventId: string, choice: 'accept' | 'decline') => void;
+  buyCompound: (site: CompoundSiteId) => void;
+  leaseCompound: (site: CompoundSiteId) => void;
+  /** Repack what's needed and load the truck for a contract in one click. */
+  quickShip: (contractId: number) => void;
+  /** Go to another farm you own (undefined = home). */
+  travel: (site: CompoundSiteId | undefined) => void;
 }
 
 export type Store = GameState & UiState & Actions;
@@ -97,7 +105,7 @@ export const gameOf = (s: Store): GameState => Object.fromEntries(GAME_KEYS.map(
 export const metaOf = (s: Store): SaveMeta => ({ reportSeenDay: s.reportSeenDay, tutorial: s.tutorial });
 
 /** UI state for a game that is just starting or resuming: nothing open, nothing selected. */
-const freshUi = () => ({ selectedPlot: null, panel: 'farm' as Panel, nearby: null, talkingTo: null, tankOpen: false, fx: null, customizingProfile: false });
+const freshUi = () => ({ selectedPlot: null, panel: 'farm' as Panel, nearby: null, talkingTo: null, tankOpen: false, fx: null, customizingProfile: false, site: undefined });
 
 const sameTarget = (a: Target | null, b: Target | null) => a?.kind === b?.kind && a?.id === b?.id;
 
@@ -169,6 +177,14 @@ export const useGameStore = create<Store>((set, get) => {
     releaseReservation: contractId => apply(s => sim.releaseReservation(s, contractId)),
     enterSandbox: () => apply(sim.enterSandboxMode),
     respondCoop: (eventId, choice) => apply(s => sim.respondToCooperativeEvent(s, eventId, choice)),
+    buyCompound: site => apply(s => sim.buyCompound(s, site)),
+    leaseCompound: site => apply(s => sim.leaseCompoundLand(s, site)),
+    quickShip: contractId => act('ship', s => sim.quickShip(s, contractId)),
+    travel: site => set(s => {
+      if (site && !(s.compounds ?? []).some(c => c.site === site)) return {};
+      const name = site ? sim.compoundSite(site).name : s.profile.farmName;
+      return { site, selectedPlot: null, talkingTo: null, tankOpen: false, nearby: null, panel: 'farm', toast: `Arrived at ${name}.` };
+    }),
     // Called every frame by the player: only touch the store when the target actually changes,
     // otherwise every subscriber (the whole HUD) would re-render at 60 fps.
     setNearby: t => { if (!sameTarget(get().nearby, t)) set({ nearby: t }); },

@@ -6,7 +6,7 @@ import { initialState } from './state';
 import { TUTORIAL_STATUSES, type TutorialProgress } from './tutorial';
 import type { GameState } from './types';
 
-export const SAVE_VERSION = 3;
+export const SAVE_VERSION = 4;
 export const SAVE_KEY = 'h2h.save';
 /** Where an unreadable save is copied before anything else may overwrite the main slot. */
 export const UNREADABLE_KEY = 'h2h.save.unreadable';
@@ -89,6 +89,19 @@ export const MIGRATIONS: Record<number, Migration> = {
       },
     };
   },
+  // v4: new equipment, farm compounds, export office auto-shipping. Field crews now harvest by default.
+  3: (data: Json) => {
+    const game = data.game as Json;
+    return {
+      ...data,
+      game: {
+        ...game,
+        upgrades: { solarPump: false, tractor: false, digger: false, companyTruck: false, exportOffice: false, ...((game?.upgrades as Json) || {}) },
+        automation: { ...((game?.automation as Json) || {}), autoHarvest: true, autoShip: false },
+        compounds: Array.isArray(game?.compounds) ? game.compounds : [],
+      },
+    };
+  },
 };
 
 export function serializeSave(game: GameState, meta: SaveMeta, now = Date.now()): string {
@@ -120,6 +133,7 @@ const ELEMENT_KEYS: Record<string, string[]> = {
   prestige: ['id', 'title', 'category'],
   recurringGoals: ['id', 'title', 'targetKg'],
   cooperativeEvents: ['id', 'type', 'status'],
+  compounds: ['site', 'boughtDay', 'leases'],
 };
 const SKIP = new Set<string>(TRANSIENT_KEYS);
 

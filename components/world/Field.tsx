@@ -110,6 +110,7 @@ function Plot({ id }: { id: number }) {
 }
 
 export default function Field() {
-  const count = useGameStore(s => s.plots.length);
-  return <group>{Array.from({ length: count }, (_, id) => <Plot key={id} id={id} />)}</group>;
+  // A string key, so the field only re-renders when beds are added or the player travels, not on every crop change.
+  const ids = useGameStore(s => s.plots.filter(p => p.compound === s.site).map(p => p.id).join(','));
+  return <group>{ids.split(',').filter(Boolean).map(Number).map(id => <Plot key={id} id={id} />)}</group>;
 }

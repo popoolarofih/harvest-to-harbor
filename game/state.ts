@@ -1,12 +1,12 @@
 import {
-  BASE_ENERGY, BASE_PRICES, DEFAULT_PROFILE, FX_BASE, FUEL_PRICE, PLOT_COLS, PLOT_ROWS, PREP, STARTING_CASH, TANK_BASE_LITRES, TANK_UPGRADE_LITRES,
+  COMPOUND_SITES, compoundSite, BASE_ENERGY, BASE_PRICES, DEFAULT_PROFILE, FX_BASE, FUEL_PRICE, LITRES_PER_FUEL_LITRE, PLOT_COLS, PLOT_ROWS, PREP, STARTING_CASH, TANK_BASE_LITRES, TANK_UPGRADE_LITRES,
   WAREHOUSE_BASE_KG, WAREHOUSE_UPGRADE_KG, WORKER_ENERGY,
 } from './config';
 import { createRng } from './rng';
 import { initialMissions } from './campaign';
 import { describeLevelUp, levelFromXp } from './levels';
 import { CAMPAIGN } from './missions';
-import type { GameState, LogLine, PlayerProfile, Plot } from './types';
+import type { CompoundSiteId, GameState, LogLine, PlayerProfile, Plot } from './types';
 import { buildForecast, initialWeatherQueue } from './weather';
 import { calculateCrewPerks, generateInitialCandidates } from './workers';
 
@@ -20,26 +20,36 @@ const ROWS = [
   { drainage: 0.25, fertility: 72, moisture: 65 },
 ];
 
-export function makePlot(id: number, x: number, z: number): Plot {
-  const row = ROWS[z];
-  return {
+export function makePlot(id: number, x: number, z: number, compound?: CompoundSiteId): Plot {
+  const site = compound ? compoundSite(compound).rows[z] : null;
+  const row = site ?? ROWS[z];
+  const plot: Plot = {
     id, x, z, status: 'empty', drainage: row.drainage, fertility: row.fertility + (x % 2 ? 4 : -3), moisture: row.moisture,
     health: 100, growth: 0, ridged: false, seed: null, stand: 0, germinated: false, daysReady: 0, issue: null,
-    organicMatter: 35 + (z * 3) + (x % 2 ? 2 : -2),
+    organicMatter: (site?.organicMatter ?? 35 + z * 3) + (x % 2 ? 2 : -2),
     compaction: 20 - (z * 2),
     diseasePressure: { rot: 0, leafSpot: 0, pest: 0 },
     cropHistory: [],
   };
+  return compound ? { ...plot, compound } : plot;
 }
 
 export function createInitialPlots(): Plot[] {
   return Array.from({ length: PLOT_COLS * PLOT_ROWS }, (_, id) => makePlot(id, id % PLOT_COLS, Math.floor(id / PLOT_COLS)));
 }
 
-/** A leased hectare adds two more columns of beds east of the field. */
-export function leasedPlots(startId: number): Plot[] {
-  return [PLOT_COLS, PLOT_COLS + 1].flatMap((x, ci) => Array.from({ length: PLOT_ROWS }, (_, z) => makePlot(startId + ci * PLOT_ROWS + z, x, z)));
+/** A leased hectare adds two more columns of beds east of a field. Plot ids always equal their index in `plots`. */
+export function leasedPlots(startId: number, compound?: CompoundSiteId, firstCol = PLOT_COLS): Plot[] {
+  return [firstCol, firstCol + 1].flatMap((x, ci) => Array.from({ length: PLOT_ROWS }, (_, z) => makePlot(startId + ci * PLOT_ROWS + z, x, z, compound)));
 }
+
+/** The 16 beds of a newly bought compound. */
+export function compoundPlots(startId: number, compound: CompoundSiteId): Plot[] {
+  return Array.from({ length: PLOT_COLS * PLOT_ROWS }, (_, i) => makePlot(startId + i, i % PLOT_COLS, Math.floor(i / PLOT_COLS), compound));
+}
+
+/** Beds on one farm: the home farm when `compound` is undefined. */
+export const plotsAt = (plots: Plot[], compound?: CompoundSiteId) => plots.filter(p => p.compound === compound);
 
 export function initialState(seed = 20261010): GameState {
   const rng = createRng(seed);
@@ -65,7 +75,7 @@ export function initialState(seed = 20261010): GameState {
       autoWater: true,
       autoTreat: true,
       autoGapFill: true,
-      autoHarvest: false,
+      autoHarvest: true,
       processingWorkers: 0,
       autoOpenRacks: true,
       autoBagRacks: false,
@@ -73,6 +83,7 @@ export function initialState(seed = 20261010): GameState {
       autoMill: false,
       millPackaging: 'sealed',
       autoReserve: false,
+      autoShip: false,
     },
     stock: { local: 0, improved: 0, certified: 0, soybean: 0, fertilizer: 0, compost: 0 },
     opSeq: 1,
@@ -86,7 +97,10 @@ export function initialState(seed = 20261010): GameState {
     coopRoadBenefitDays: 0,
     sandboxMode: false,
     difficulty: 'normal',
-    upgrades: { irrigation: false, warehouseLevel: 0, tankLevel: 0, insurance: false, mill: false, solarDryer: false, factory: false, landLeased: 0 },
+    upgrades: {
+      irrigation: false, warehouseLevel: 0, tankLevel: 0, insurance: false, mill: false, solarDryer: false, factory: false, landLeased: 0,
+      solarPump: false, tractor: false, digger: false, companyTruck: false, exportOffice: false,
+    },
     weather: 'sunny', weatherQueue, forecast,
     market: { ...BASE_PRICES }, fxRate: FX_BASE, priceHistory: [{ day: 1, ...BASE_PRICES }],
     events: [], log: [{ day: 1, text: 'Your uncle hands you 2 hectares outside Kafanchan. The season starts now.', severity: 'info' }],
@@ -97,13 +111,15 @@ export function initialState(seed = 20261010): GameState {
     flags: { talked: { baba: 0, amaka: 0, chinedu: 0 }, stormDay: null, stormOutcome: null, exportUnlocked: false, shipments: 0 },
     missionBase: 0,
     story: { speaker: CAMPAIGN[0].npc, title: `Mission 1: ${CAMPAIGN[0].title}`, text: CAMPAIGN[0].intro },
-    contracts: [], shipments: [], loans: [], creditBlocked: false, levelUp: null,
+    contracts: [], shipments: [], loans: [], compounds: [], creditBlocked: false, levelUp: null,
     toast: 'Welcome to your first ginger season.',
     profile: { ...DEFAULT_PROFILE },
   };
 }
 
-export const plotName = (p: Pick<Plot, 'x' | 'z'>) => `${'ABCD'[p.z]}${p.x + 1}`;
+export const plotName = (p: Pick<Plot, 'x' | 'z'> & { compound?: CompoundSiteId }) =>
+  `${p.compound ? `${compoundSite(p.compound).code}-` : ''}${'ABCD'[p.z]}${p.x + 1}`;
+export const COMPOUND_IDS = COMPOUND_SITES.map(c => c.id);
 export const effectiveDrainage = (p: Plot) =>
   Math.max(0.1, Math.min(1, (p.drainage + (p.ridged ? PREP.ridge.drainageBonus : 0)) * (1 - (p.compaction ?? 20) * 0.003)));
 export const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
@@ -122,6 +138,8 @@ export const stockKg = (s: GameState) =>
     : 0;
 export const storedKg = (s: GameState) => s.batches.reduce((sum, b) => sum + b.kg, 0) + stockKg(s);
 export const hasEvent = (s: GameState, kind: GameState['events'][number]['kind']) => s.events.find(e => e.kind === kind);
+/** Diesel to refill the tank from empty-ish; zero with a solar pump. */
+export const pumpCost = (s: GameState, litres: number) => (s.upgrades.solarPump ? 0 : Math.round(Math.ceil(litres / LITRES_PER_FUEL_LITRE) * fuelPrice(s)));
 export const fuelPrice = (s: GameState) => FUEL_PRICE * (hasEvent(s, 'fuelSpike')?.magnitude ?? 1);
 export const availableWorkers = (s: GameState) => Math.floor(s.workers * (hasEvent(s, 'workerShortage')?.magnitude ?? 1));
 export const maxEnergy = (s: GameState) => BASE_ENERGY + availableWorkers(s) * WORKER_ENERGY + calculateCrewPerks(s.crew ?? []).extraEnergy;

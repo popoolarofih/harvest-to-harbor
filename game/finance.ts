@@ -1,6 +1,6 @@
 import { BANK_LOANS, DEFAULT_PENALTY, EQUIPMENT_FINANCE, INSURANCE_PREMIUM, MAINTENANCE, UPGRADES, WAGE_PER_DAY, type UpgradeId } from './config';
 import { buyerOf, contractValue } from './contracts';
-import { applyUpgrade, ownsUpgrade, upgradeBlocked } from './economy';
+import { applyUpgrade, compoundUpkeep, ownsUpgrade, upgradeBlocked } from './economy';
 import { autoIrrigate } from './irrigation';
 import { recordLedgerEntry } from './ledger';
 import { lockedReason } from './levels';
@@ -141,8 +141,9 @@ export function tickLoans(s: GameState, lines: LogLine[]): GameState {
   };
 }
 
+/** Daily running costs of equipment, plus upkeep of any farm compounds you have bought. */
 export function maintenanceCost(s: GameState) {
-  return (Object.keys(MAINTENANCE) as UpgradeId[]).reduce((sum, id) => sum + (ownsUpgrade(s, id) ? MAINTENANCE[id]! : 0), 0);
+  return (Object.keys(MAINTENANCE) as UpgradeId[]).reduce((sum, id) => sum + (ownsUpgrade(s, id) ? MAINTENANCE[id]! : 0), 0) + compoundUpkeep(s);
 }
 export const totalWages = (s: GameState) => (s.crew && s.crew.length > 0 ? s.crew.reduce((sum, w) => sum + w.dailyWage, 0) : s.workers * WAGE_PER_DAY);
 export const dailyFixedCosts = (s: GameState) => totalWages(s) + (s.upgrades.insurance ? INSURANCE_PREMIUM : 0) + maintenanceCost(s);

@@ -3,7 +3,7 @@ import {
 } from './config';
 import { isUnlocked, lockedReason } from './levels';
 import {
-  fertilizePlot, gapFillPlot, inspectPlot, plantPlot, preparePlot, treatPlot, waterPlot,
+  fertilizePlot, gapFillPlot, inspectPlot, plantPlot, prepCost, preparePlot, treatPlot, waterPlot,
 } from './farm';
 import { applyCompost, getConsecutiveGingerCount } from './soil';
 import { blocked, fail, log, money, plotName } from './state';
@@ -61,7 +61,7 @@ export function previewBulk(s: GameState, kind: BulkActionKind, options: BulkOpt
         continue;
       }
       eligiblePlotIds.push(p.id);
-      reqCash += PREP[prepMethod].cost;
+      reqCash += prepCost(s, prepMethod);
       reqEnergy += PREP[prepMethod].energy + ENERGY.plant;
 
       if (options.plantCrop === 'soybean') {

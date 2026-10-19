@@ -13,7 +13,7 @@ import { view } from './playerState';
 /** "plot:5" / "npc:baba" / "station:warehouse": a string, so the selector only re-renders when the target moves. */
 function beaconKey(s: ReturnType<typeof useGameStore.getState>): string | null {
   const step = currentStep(s.tutorial);
-  if (!step?.world || s.story) return null;
+  if (!step?.world || s.story || s.site) return null;
   const t = step.world(s.plots);
   return t ? `${t.kind}:${t.id}` : null;
 }

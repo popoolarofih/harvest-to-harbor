@@ -1,7 +1,7 @@
 'use client';
 import { useState } from 'react';
 import {
-  BANK_LOANS, EQUIPMENT_FINANCE, HIRE_COST, INSURANCE_PREMIUM, IRRIGATION_REPAIR_COST, LEVEL_REQUIREMENTS, PLOTS_PER_FIELD_WORKER,
+  BANK_LOANS, EQUIPMENT_FINANCE, HIRE_COST, INSURANCE_PREMIUM, IRRIGATION_REPAIR_COST, LEVEL_REQUIREMENTS, harvestCapacity, plantingCapacity,
   ROLE_DETAILS, TRAIT_DETAILS, UPGRADES, WAGE_PER_DAY, WORKER_ENERGY, availableWorkers, cashForecast,
   creditLimit, dailyFixedCosts, exportLedgerCsv, generateFinancialReport, getAvailablePeriods, isUnlocked,
   loanBlocked, lockedReason, maintenanceCost, maxWorkers, money, ownsUpgrade, tankCapacity,
@@ -9,6 +9,7 @@ import {
   type UpgradeId, type WorkerCandidate, type WorkerProfile, PRESTIGE_DEFINITIONS,
 } from '../../game/simulation';
 import { useGameStore } from '../../stores/gameStore';
+import ExpansionPanel from './ExpansionPanel';
 
 /** 30-day cash projection: where the money goes if nothing else is sold. */
 function CashChart({ points }: { points: CashPoint[] }) {
@@ -39,7 +40,7 @@ export default function BusinessPanel() {
   const burn = dailyFixedCosts(s);
   const loanNo = loanBlocked(s);
 
-  const [activeTab, setActiveTab] = useState<'reports' | 'operations' | 'crew' | 'prestige'>('reports');
+  const [activeTab, setActiveTab] = useState<'reports' | 'operations' | 'crew' | 'expansion' | 'prestige'>('reports');
   const [statementView, setStatementView] = useState<'pnl' | 'balance' | 'cashflow' | 'ledger'>('pnl');
   const [ledgerFilter, setLedgerFilter] = useState<'all' | 'revenue' | 'cogs' | 'opex' | 'financing' | 'capex'>('all');
 
@@ -103,6 +104,13 @@ export default function BusinessPanel() {
         onClick={() => setActiveTab('crew')}
       >
         👥 Crew ({s.crew?.length ?? 0})
+      </button>
+      <button
+        className={`tab ${activeTab === 'expansion' ? 'active' : ''}`}
+        style={{ flex: 1, padding: '10px 14px', fontSize: '13px', fontWeight: 600, textAlign: 'center' }}
+        onClick={() => setActiveTab('expansion')}
+      >
+        🌍 Expansion ({1 + (s.compounds?.length ?? 0)})
       </button>
       <button
         className={`tab ${activeTab === 'prestige' ? 'active' : ''}`}
@@ -518,6 +526,7 @@ export default function BusinessPanel() {
         </div>
 
         <h4>Equipment & land</h4>
+        <p className="muted small">As the business grows, money buys time: machines that do the heavy work, cut running costs, or make exporting simpler. New equipment unlocks as you level up. Every machine has a small daily running cost, so buy what you will use.</p>
         {(Object.keys(UPGRADES) as UpgradeId[]).map(id => {
           const u = UPGRADES[id];
           const owned = ownsUpgrade(s, id), blockedBy = upgradeBlocked(s, id);
@@ -669,11 +678,19 @@ export default function BusinessPanel() {
               />
             </label>
             <small className="muted" style={{ display: 'block', margin: '-4px 0 8px 2px', fontSize: '11px' }}>
-              {(s.automation.fieldWorkers ?? 0) * PLOTS_PER_FIELD_WORKER} plots managed each morning.
+              Each morning: harvest up to {harvestCapacity(s, s.automation.fieldWorkers ?? 0)} ready beds, plant up to {plantingCapacity(s, s.automation.fieldWorkers ?? 0)} empty ones, and tend every growing bed{(s.compounds?.length ?? 0) > 0 ? ' on all your farms' : ''}.
             </small>
 
             {(s.automation.fieldWorkers ?? 0) > 0 && (
               <div className="crew-subgroup">
+                <label className="check">
+                  <input
+                    type="checkbox"
+                    checked={s.automation.autoHarvest ?? true}
+                    onChange={e => s.configureAutomation({ autoHarvest: e.target.checked })}
+                  />
+                  Harvest ready beds automatically
+                </label>
                 <label className="check">
                   <input
                     type="checkbox"
@@ -820,6 +837,8 @@ export default function BusinessPanel() {
         )}
       </div>
     )}
+
+    {activeTab === 'expansion' && <ExpansionPanel />}
 
     {activeTab === 'prestige' && (
       <div>

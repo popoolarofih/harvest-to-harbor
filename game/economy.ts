@@ -1,11 +1,11 @@
 import {
   BUYERS, CUT, DRYING_COST_PER_KG, DRYING_RACK_KG, ENERGY, FACTORY_SEALED_DISCOUNT, GRIND_COST_PER_KG, GRIND_FUEL_PER_KG, GRIND_MAX_MOISTURE, GRIND_YIELD,
-  HIRE_COST, IRRIGATION_REPAIR_COST, LITRES_PER_FUEL_LITRE, MAX_LAND_LEASES, PACKAGING, SAFE_MOISTURE, SORT, UPGRADES, WAGE_PER_DAY, WASH, WATER_PER_PLOT, WORKER_ENERGY, type UpgradeId,
+  HIRE_COST, IRRIGATION_REPAIR_COST, MAX_COMPOUND_LEASES, MAX_LAND_LEASES, compoundSite, PACKAGING, SAFE_MOISTURE, SORT, UPGRADES, WAGE_PER_DAY, WASH, WATER_PER_PLOT, WORKER_ENERGY, type UpgradeId,
 } from './config';
 import { lockedReason, maxWorkers, type UnlockId } from './levels';
 import { checkSale, gradeForBatch, gradeLabel, inspectBatchReport } from './quality';
-import { addXp, blocked, clamp, earn, fail, fuelPrice, leasedPlots, log, money, spend, tankCapacity } from './state';
-import type { Batch, DryingJob, GameState, Packaging, PrepChoices, WorkerProfile } from './types';
+import { addXp, blocked, clamp, compoundPlots, earn, fail, fuelPrice, leasedPlots, log, money, plotsAt, pumpCost, spend, tankCapacity } from './state';
+import type { Batch, CompoundSiteId, DryingJob, GameState, Packaging, PrepChoices, WorkerProfile } from './types';
 import { autoIrrigate } from './irrigation';
 import { ROLE_DETAILS } from './workers';
 import { recordLedgerEntry } from './ledger';
@@ -181,10 +181,11 @@ export function inspectBatch(s: GameState, batchId: number): GameState {
 export function pumpWater(s: GameState): GameState {
   const litres = tankCapacity(s) - s.water;
   if (litres <= 0) return fail(s, 'The tank is already full.');
-  const cost = Math.round(Math.ceil(litres / LITRES_PER_FUEL_LITRE) * fuelPrice(s));
+  const cost = pumpCost(s, litres);
   const why = blocked(s, { energy: ENERGY.pump, cash: cost });
   if (why) return fail(s, why);
-  let nextState = { ...spend(s, cost, ENERGY.pump), water: tankCapacity(s), toast: `Borehole pump filled the tank: ${litres.toLocaleString()} L for ${money(cost)} in fuel.` };
+  const how = s.upgrades.solarPump ? 'free, on solar power' : `for ${money(cost)} in fuel`;
+  let nextState = { ...spend(s, cost, ENERGY.pump), water: tankCapacity(s), toast: `Borehole pump filled the tank: ${litres.toLocaleString()} L ${how}.` };
   if (cost > 0) {
     nextState = recordLedgerEntry(nextState, {
       id: `pump-water-${s.day}-${s.nextId}`,
@@ -327,12 +328,15 @@ export function dismissWorker(s: GameState): GameState {
 }
 
 /** Which level unlock (if any) gates each upgrade. */
-export const UPGRADE_UNLOCK: Partial<Record<UpgradeId, UnlockId>> = { solarDryer: 'solarDryer', mill: 'mill', warehouse: 'warehouse', factory: 'factory', land: 'landExpansion' };
+export const UPGRADE_UNLOCK: Partial<Record<UpgradeId, UnlockId>> = {
+  solarDryer: 'solarDryer', mill: 'mill', warehouse: 'warehouse', factory: 'factory', land: 'landExpansion',
+  solarPump: 'solarPump', tractor: 'tractor', digger: 'digger', companyTruck: 'companyTruck', exportOffice: 'exportOffice',
+};
 
-export function ownsUpgrade(s: GameState, id: UpgradeId) {
-  if (id === 'irrigation' || id === 'mill' || id === 'solarDryer' || id === 'factory') return s.upgrades[id];
+export function ownsUpgrade(s: GameState, id: UpgradeId): boolean {
   if (id === 'land') return s.upgrades.landLeased >= MAX_LAND_LEASES;
-  return false;
+  if (id === 'warehouse' || id === 'tank') return false;
+  return !!s.upgrades[id];
 }
 
 /** Why an upgrade can't be bought right now (ignoring cash), or null. */
@@ -349,6 +353,7 @@ export function applyUpgrade(s: GameState, id: UpgradeId): GameState {
   if (id === 'warehouse') upgrades.warehouseLevel++;
   else if (id === 'tank') upgrades.tankLevel++;
   else if (id === 'land') { upgrades.landLeased++; plots = [...s.plots, ...leasedPlots(s.plots.length)]; }
+  else if (id === 'exportOffice') { upgrades.exportOffice = true; return { ...s, upgrades, automation: { ...s.automation, autoShip: true }, reputation: s.reputation + 1 }; }
   else upgrades[id] = true;
   return { ...s, upgrades, plots, reputation: s.reputation + 1 };
 }
@@ -396,3 +401,74 @@ export function toggleInsurance(s: GameState): GameState {
   const insurance = !s.upgrades.insurance;
   return { ...s, upgrades: { ...s.upgrades, insurance }, toast: insurance ? 'Crop insurance active: premium charged daily, storm and flood losses partly covered.' : 'Insurance cancelled. Your crop is exposed to weather losses.' };
 }
+
+// ---- More farms: buying whole compounds and leasing land beside them ----
+
+export const ownsCompound = (s: GameState, site: CompoundSiteId) => (s.compounds ?? []).some(c => c.site === site);
+
+/** Why a compound can't be bought right now (ignoring cash), or null. */
+export function compoundBlocked(s: GameState, site: CompoundSiteId): string | null {
+  const c = compoundSite(site);
+  if (ownsCompound(s, site)) return `You already own ${c.name}.`;
+  return s.level < c.minLevel ? `Unlocks at Level ${c.minLevel}` : null;
+}
+
+/** Buy a whole new farm: 16 beds with their own soil, run by your crew and visited by travelling there. */
+export function buyCompound(s: GameState, site: CompoundSiteId): GameState {
+  const c = compoundSite(site);
+  const no = compoundBlocked(s, site);
+  if (no) return fail(s, no);
+  const why = blocked(s, { cash: c.cost });
+  if (why) return fail(s, why);
+  let next: GameState = {
+    ...spend(s, c.cost),
+    plots: [...s.plots, ...compoundPlots(s.plots.length, site)],
+    compounds: [...(s.compounds ?? []), { site, boughtDay: s.day, leases: 0 }],
+    reputation: s.reputation + 3,
+  };
+  next = recordLedgerEntry(next, {
+    id: `buy-compound-${site}-${s.day}`, day: s.day, category: 'capitalExpenditure', amount: c.cost, referenceId: site,
+    description: `Bought ${c.name} (${c.place})`,
+  });
+  const first = (s.compounds ?? []).length === 0;
+  next = log(next, { text: `Bought ${c.name} at ${c.place} for ${money(c.cost)}: 16 new beds. ${c.lesson}`, severity: 'good' });
+  return addXp({
+    ...next,
+    toast: `${c.name} is yours. Travel there with the farm switcher.`,
+    story: {
+      speaker: 'baba',
+      title: first ? 'A second farm' : c.name,
+      text: first
+        ? `Two farms, my child! Your father farmed one hectare his whole life. Remember: you cannot stand in two fields at once. Put good hands on the field crew and they will plant, tend and harvest ${c.place} while you are away. ${c.lesson}`
+        : `Another compound, at ${c.place}. ${c.lesson} Watch your daily upkeep: land that sits empty still costs money.`,
+    },
+  }, 150);
+}
+
+/** Each extra hectare beside a compound costs a quarter more than the last. */
+export const compoundLeaseCost = (s: GameState, site: CompoundSiteId) =>
+  Math.round(UPGRADES.land.cost * (1 + 0.25 * ((s.compounds ?? []).find(c => c.site === site)?.leases ?? 0)));
+
+/** Lease two more columns of beds beside a bought compound (there are no buildings in the way there). */
+export function leaseCompoundLand(s: GameState, site: CompoundSiteId): GameState {
+  const owned = (s.compounds ?? []).find(c => c.site === site);
+  if (!owned) return fail(s, 'Buy the compound first.');
+  if (owned.leases >= MAX_COMPOUND_LEASES) return fail(s, `${compoundSite(site).name} can't lease any more land.`);
+  const cost = compoundLeaseCost(s, site);
+  const why = blocked(s, { cash: cost });
+  if (why) return fail(s, why);
+  const firstCol = 1 + Math.max(...plotsAt(s.plots, site).map(p => p.x));
+  let next: GameState = {
+    ...spend(s, cost),
+    plots: [...s.plots, ...leasedPlots(s.plots.length, site, firstCol)],
+    compounds: s.compounds.map(c => (c.site === site ? { ...c, leases: c.leases + 1 } : c)),
+  };
+  next = recordLedgerEntry(next, {
+    id: `lease-${site}-${s.day}-${owned.leases}`, day: s.day, category: 'capitalExpenditure', amount: cost, referenceId: site,
+    description: `Leased another hectare at ${compoundSite(site).name}`,
+  });
+  return addXp(log({ ...next, toast: `+8 beds at ${compoundSite(site).name}.` }, { text: `Leased another hectare at ${compoundSite(site).name} (${money(cost)}).`, severity: 'info' }), 40);
+}
+
+/** Caretakers, security and trucking the harvest home, for every bought compound. */
+export const compoundUpkeep = (s: GameState) => (s.compounds ?? []).reduce((t, c) => t + compoundSite(c.site).upkeep, 0);

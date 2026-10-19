@@ -1,14 +1,14 @@
 import {
-  FERTILIZER_COST, FERTILIZER_GAIN, FRESH_MOISTURE, GRIND_MAX_MOISTURE, GRIND_YIELD,
-  LITRES_PER_FUEL_LITRE, MILL_KG_PER_WORKER, PLOTS_PER_FIELD_WORKER, PREP,
+  FERTILIZER_COST, FERTILIZER_GAIN, GRIND_MAX_MOISTURE, GRIND_YIELD, HARVEST_BEDS_PER_WORKER,
+  MILL_KG_PER_WORKER, PLOTS_PER_FIELD_WORKER,
   SAFE_MOISTURE, SEEDS, TREATMENTS, WATER_MOISTURE_GAIN, WATER_PER_PLOT,
 } from './config';
-import { getReservedKg, reserveStock } from './contracts';
+import { getReservedKg, quickShip, reserveStock } from './contracts';
+import { harvestPlot, prepCost } from './farm';
 import { dryKgOf, grindCost, packagingCost } from './economy';
 import { autoIrrigate } from './irrigation';
 import { isUnlocked } from './levels';
-import { expectedQuality, expectedYieldKg } from './quality';
-import { availableWorkers, clamp, fuelPrice, storedKg, tankCapacity, warehouseCapacity } from './state';
+import { availableWorkers, clamp, plotName, pumpCost, storedKg, tankCapacity, warehouseCapacity } from './state';
 import type { AutomationSummary, Batch, GameState, Weather } from './types';
 import type { Rng } from './rng';
 import { isWet } from './weather';
@@ -19,8 +19,41 @@ export const emptyAutomationSummary = (): AutomationSummary => ({
   fertilizedPlots: 0, fertilizerCost: 0, coveredRacks: 0, irrigationNeedsRepair: false,
   plantedPlots: 0, plantedCost: 0, wateredPlots: 0, treatedPlots: 0, treatmentCost: 0,
   gapFilledPlots: 0, harvestedPlots: 0, harvestedKg: 0, openedRacks: 0, baggedRacks: 0,
-  milledBatches: 0, milledKg: 0, reservedKg: 0, blocked: [],
+  milledBatches: 0, milledKg: 0, reservedKg: 0, shippedContracts: 0, blocked: [],
 });
+
+/** Ready beds the field crew can lift in one morning. */
+export const harvestCapacity = (s: GameState, fieldWorkers: number) => fieldWorkers * HARVEST_BEDS_PER_WORKER * (s.upgrades.digger ? 3 : 1);
+/** Empty beds the field crew can prepare and plant in one morning. */
+export const plantingCapacity = (s: GameState, fieldWorkers: number) => fieldWorkers * PLOTS_PER_FIELD_WORKER * (s.upgrades.tractor ? 2 : 1);
+
+/**
+ * Field crew lifts ready beds exactly as the player would (same yield, soil and crop-history effects),
+ * but with their own labour, not the player's energy. Runs before the day's growth, so a bed that turns
+ * ready overnight is lifted the next morning.
+ */
+function crewHarvest(s: GameState, fieldWorkers: number, summary: AutomationSummary, blockedReasons: Set<string>): GameState {
+  const ready = s.plots.filter(p => p.status === 'ready');
+  if (!ready.length) return s;
+  let capacity = harvestCapacity(s, fieldWorkers), next = s;
+  for (const p of ready) {
+    if (capacity <= 0) {
+      const waiting = ready.length - (summary.harvestedPlots ?? 0);
+      blockedReasons.add(`${waiting} ready bed${waiting > 1 ? 's' : ''} left for tomorrow: the field crew lifted all they could. More field workers${s.upgrades.digger ? '' : ' or a mechanical digger'} would help.`);
+      break;
+    }
+    const kgBefore = next.batches.reduce((t, b) => t + b.kg, 0);
+    // The crew works with its own hands: lend the action the energy, then give the player's back.
+    const after = harvestPlot({ ...next, energy: Number.MAX_SAFE_INTEGER }, p.id);
+    if (after.plots[p.id]?.status === 'ready') { blockedReasons.add(`Crew could not harvest ${plotName(p)}: ${after.toast}`); continue; }
+    next = { ...after, energy: next.energy, toast: next.toast };
+    capacity--;
+    summary.harvestedPlots = (summary.harvestedPlots ?? 0) + 1;
+    summary.harvestedKg = (summary.harvestedKg ?? 0) + Math.max(0, next.batches.reduce((t, b) => t + b.kg, 0) - kgBefore);
+  }
+  if (storedKg(next) > warehouseCapacity(next)) blockedReasons.add('The warehouse is over capacity after the harvest: sell, process or expand storage before stock spoils.');
+  return next;
+}
 
 /** Morning jobs by equipment, hired field labour, and processing workers. */
 export function runAutomation(s: GameState, weather: Weather, rng: Rng) {
@@ -31,11 +64,11 @@ export function runAutomation(s: GameState, weather: Weather, rng: Rng) {
   // 1. Drip irrigation controller & borehole pump
   if (next.automation.autoPump && next.upgrades.irrigation && next.water < WATER_PER_PLOT) {
     const litres = tankCapacity(next) - next.water;
-    const cost = Math.round(Math.ceil(litres / LITRES_PER_FUEL_LITRE) * fuelPrice(next));
+    const cost = pumpCost(next, litres);
     if (litres > 0) {
       if (next.cash >= cost) {
         next = { ...next, water: tankCapacity(next), cash: next.cash - cost, finance: { ...next.finance, expenses: next.finance.expenses + cost } };
-        next = recordLedgerEntry(next, {
+        if (cost > 0) next = recordLedgerEntry(next, {
           id: `auto-pump-${s.day}`,
           day: s.day,
           category: 'fuelUtilities',
@@ -239,39 +272,30 @@ export function runAutomation(s: GameState, weather: Weather, rng: Rng) {
     }
   }
 
-  // 5. Hired field labours: automatically plant and maintain the plants
+  // 5. Export office: load the truck for any open contract that can be filled
+  if (next.automation.autoShip && next.upgrades.exportOffice) {
+    for (const c of next.contracts.filter(k => k.status === 'active')) {
+      const shipped = quickShip(next, c.id, true);
+      if (shipped.contracts.find(k => k.id === c.id)?.status === 'shipping') {
+        next = { ...shipped, toast: next.toast };
+        summary.shippedContracts = (summary.shippedContracts ?? 0) + 1;
+      }
+    }
+  }
+
+  // 6. Hired field labour: harvest, then maintain and plant
   const activeField = Math.min(next.automation.fieldWorkers ?? 0, availableWorkers(next));
+  if (activeField === 0 && (next.automation.fieldWorkers ?? 0) > 0) {
+    blockedReasons.add('Worker shortage: your field crew is helping on neighbouring farms, so nothing was planted, tended or harvested today.');
+  }
+  if (activeField > 0 && (next.automation.autoHarvest ?? true)) next = crewHarvest(next, activeField, summary, blockedReasons);
   if (activeField > 0) {
-    let remainingCapacity = activeField * PLOTS_PER_FIELD_WORKER;
+    let remainingCapacity = plantingCapacity(next, activeField);
 
     // A. Maintain growing and ready crops
     if (next.automation.autoMaintain ?? true) {
       const updatedPlots = next.plots.map(orig => {
         let p = { ...orig };
-
-        // Auto-harvest ready crops if enabled
-        if (next.automation.autoHarvest && p.status === 'ready') {
-          const kg = expectedYieldKg(p), quality = expectedQuality(p);
-          const moisture = FRESH_MOISTURE;
-          const todays = next.batches.find(b => b.product === 'fresh' && b.createdDay === next.day);
-          let batches: Batch[];
-          if (todays) {
-            const total = todays.kg + kg;
-            const merged = { ...todays, kg: total, quality: (todays.quality * todays.kg + quality * kg) / total, moisture: (todays.moisture * todays.kg + moisture * kg) / total };
-            batches = next.batches.map(b => (b.id === todays.id ? merged : b));
-          } else {
-            batches = [...next.batches, { id: next.nextId++, product: 'fresh', kg, quality, moisture, createdDay: next.day }];
-          }
-          next = { ...next, batches, stats: { ...next.stats, harvestedKg: next.stats.harvestedKg + kg } };
-          summary.harvestedPlots = (summary.harvestedPlots ?? 0) + 1;
-          summary.harvestedKg = (summary.harvestedKg ?? 0) + kg;
-          return {
-            ...p,
-            status: 'empty' as const, growth: 0, health: 100, ridged: false, seed: null,
-            stand: 0, germinated: false, daysReady: 0, issue: null,
-            fertility: Math.max(10, p.fertility - 10),
-          };
-        }
 
         if (p.status !== 'growing' && p.status !== 'ready') return p;
 
@@ -355,13 +379,13 @@ export function runAutomation(s: GameState, weather: Weather, rng: Rng) {
       const prepMethod = next.automation.prepMethod ?? 'ridge';
       let seedTier = next.automation.plantSeed ?? 'improved';
       if (seedTier === 'certified' && !isUnlocked(next, 'certifiedSeed')) seedTier = 'improved';
-      const prepCost = PREP[prepMethod].cost;
+      const bedPrep = prepCost(next, prepMethod);
 
       const plots = next.plots.map(orig => {
         if (orig.status !== 'empty' || remainingCapacity <= 0) return orig;
         const hasStock = (next.stock?.[seedTier] ?? 0) > 0;
         const seedCost = hasStock ? 0 : SEEDS[seedTier].cost;
-        const totalCost = prepCost + seedCost;
+        const totalCost = bedPrep + seedCost;
 
         if (next.cash < totalCost) {
           blockedReasons.add('Auto-planting paused: insufficient cash to prepare soil & buy seed.');

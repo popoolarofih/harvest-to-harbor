@@ -23,3 +23,4 @@ export * from './soil';
 export * from './workers';
 export * from './ledger';
 export * from './endgame';
+export * from './lessons';

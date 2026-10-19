@@ -3860,3 +3860,137 @@ kbd {
   animation: none !important;
   transition: none !important;
 }
+
+/* ============================================================
+   Expansion, crews, easy export, lessons, privacy page
+   ============================================================ */
+
+/* Morning report: crew notes and the daily lesson. The report can now be long, so it scrolls. */
+.report {
+  max-height: calc(100dvh - 150px);
+  overflow-y: auto;
+}
+.report-automation span.good { color: #15803d; font-weight: 600; }
+.report ul.report-blocked { margin-top: 4px; font-size: 13.5px; }
+.report-lesson {
+  margin: 12px 0 0;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--panel2);
+  border: 1.5px solid var(--green-border-subtle);
+}
+.report-lesson b { font-size: 13.5px; }
+.report-lesson p { margin-top: 4px; font-size: 13.5px; color: var(--text); }
+
+/* Trade: export checklist and one-click shipping. */
+.ship-checklist { margin-top: 10px; }
+.checklist {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 10px;
+  font-size: 13.5px;
+}
+.checklist > div {
+  padding: 8px 12px;
+  border-radius: 12px;
+  border: 1.5px solid var(--line);
+  background: var(--white);
+}
+.checklist > div small { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
+.checklist .ok { border-color: var(--green-border); background: var(--green-light); color: #14532d; }
+.checklist .fixable { border-color: #93c5fd; background: #eff6ff; color: #1e3a8a; }
+.checklist .todo { border-color: #fcd34d; background: var(--orange-light); color: #92400e; }
+details.dispatch > summary {
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 13.5px;
+  color: var(--green-dark);
+}
+details.dispatch[open] > summary { margin-bottom: 8px; }
+.check.auto-ship {
+  align-items: flex-start;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--panel2);
+  border: 1.5px solid var(--green-border-subtle);
+  font-size: 13.5px;
+  margin: 6px 0 10px;
+}
+
+/* Business → Expansion: farms owned and for sale. */
+.site-card {
+  padding: 14px;
+  margin: 10px 0;
+  border-radius: 16px;
+  background: var(--white);
+  border: 1.5px solid var(--line);
+  box-shadow: var(--card-shadow);
+}
+.site-card.here { border-color: var(--green); background: var(--panel2); }
+.site-card.locked { opacity: 0.7; }
+.site-card .site-head { display: grid; gap: 2px; }
+.site-card .site-head b { font-family: 'Space Grotesk', sans-serif; font-size: 16px; color: var(--green-dark); }
+.site-card p.small { margin: 8px 0; font-size: 13.5px; }
+.site-card .btns { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.site-card .btns button {
+  padding: 8px 14px;
+  border-radius: 12px;
+  border: 1.5px solid var(--green-border);
+  background: var(--white);
+  color: var(--green-dark);
+  font-weight: 600;
+  cursor: pointer;
+}
+.site-card .btns button.primary { background: var(--green); border-color: var(--green); color: #fff; }
+.site-card .btns button:disabled { opacity: 0.55; cursor: not-allowed; }
+.site-soil { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12.5px; color: var(--muted); }
+.site-soil b { color: var(--green-dark); }
+
+/* Sidebar: travel between farms. */
+.site-switch { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 10px; }
+.site-switch button {
+  padding: 5px 10px;
+  border-radius: 999px;
+  border: 1.5px solid var(--green-border-subtle);
+  background: var(--white);
+  color: var(--green-dark);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.site-switch button.on { background: var(--green); border-color: var(--green); color: #fff; }
+.harvest-chip .chip-note { font-weight: 400; opacity: 0.85; }
+.alert.harvest-chip.muted { background: var(--panel2); color: var(--muted); border-color: var(--green-border-subtle); }
+.alert.site-note { background: #eff6ff; color: #1e3a8a; border-color: #93c5fd; font-size: 13px; }
+
+/* Links to the privacy policy. */
+.title-foot a, .menu-legal { color: var(--green2); font-weight: 600; }
+.menu-legal { display: block; text-align: center; margin-top: 14px; font-size: 13px; }
+
+/* Privacy policy page: an ordinary scrolling document, not the game shell. */
+.legal-page {
+  min-height: 100vh;
+  padding: 32px 16px 48px;
+  background: radial-gradient(circle at 50% 0%, #e8f5e9 0%, var(--bg) 60%);
+}
+.legal-card {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 28px clamp(18px, 4vw, 40px);
+  background: var(--panel);
+  border-radius: 20px;
+  border: 1.5px solid var(--green-border-subtle);
+  box-shadow: var(--card-shadow);
+}
+.legal-card h1 { font-family: 'Space Grotesk', sans-serif; color: var(--text-heading); margin: 4px 0 2px; font-size: clamp(28px, 5vw, 38px); }
+.legal-card h2 { font-family: 'Space Grotesk', sans-serif; color: var(--green-dark); font-size: 19px; margin: 26px 0 8px; }
+.legal-card p, .legal-card li { font-size: 15px; line-height: 1.65; }
+.legal-meta { color: var(--muted); margin: 0 0 12px; }
+.legal-summary { padding: 4px 18px 8px; border-radius: 16px; background: var(--panel2); border: 1.5px solid var(--green-border-subtle); }
+.legal-summary h2 { margin-top: 14px; }
+.legal-table { width: 100%; border-collapse: collapse; font-size: 14px; margin: 10px 0; display: block; overflow-x: auto; }
+.legal-table th, .legal-table td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+.legal-table th { color: var(--green-dark); font-weight: 600; }
+.legal-card code { font-size: 13px; background: var(--panel2); padding: 1px 5px; border-radius: 6px; }
+.legal-card a { color: var(--green2); font-weight: 600; }
+.legal-back { margin-top: 28px; }

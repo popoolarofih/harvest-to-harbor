@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_PROFILE } from '../game/config';
 import { initialState, updateProfile } from '../game/state';
-import { MIGRATIONS, migrate, parseSave, restoreGame, serializeSave, type SaveMeta } from '../game/save';
+import { MIGRATIONS, SAVE_VERSION, migrate, parseSave, restoreGame, serializeSave, type SaveMeta } from '../game/save';
 
 const META: SaveMeta = { reportSeenDay: 1, tutorial: { status: 'active', step: 1 } };
 
@@ -83,7 +83,7 @@ describe('personalization & player profile', () => {
     };
 
     const migrated = migrate(v1Container, 1);
-    expect(migrated.version).toBe(3);
+    expect(migrated.version).toBe(SAVE_VERSION);
     expect((migrated.game as any).profile).toEqual(DEFAULT_PROFILE);
 
     const restored = restoreGame(migrated as any);

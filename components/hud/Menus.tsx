@@ -159,6 +159,7 @@ export function GameMenu({ onClose, onOpenProfile }: { onClose: () => void; onOp
           <button id="menu-rotate-screen" className="action" onClick={rotateScreen}><strong>📱 Rotate screen</strong></button>
           <button className="action" onClick={() => { onClose(); toTitle(); }}><strong>Save &amp; main menu</strong></button>
         </div>
+        <a className="menu-legal" href="/privacy" target="_blank" rel="noopener">🔒 Privacy policy</a>
       </div>
     </div>
   );
@@ -195,6 +196,18 @@ export function HowToPlay({ onClose }: { onClose: () => void }) {
           <section>
             <h4>💰 Sell and export</h4>
             <p>Grade (Premium, A, B, C) sets the price. Compare buyers in Storage, sign contracts in Trade, and ship export orders through Lagos. Late or failed deliveries cost money and reputation.</p>
+          </section>
+          <section>
+            <h4>👷 Your crew</h4>
+            <p>Hire workers in <b>Business → Crew</b>. Field workers <b>harvest ready beds automatically</b> each morning, and can also plant, water, treat and fertilize for you. Processing workers cover racks in rain, bag dry ginger and run the mill.</p>
+          </section>
+          <section>
+            <h4>🌍 Grow the business</h4>
+            <p>As cash grows, invest: a solar pump, tractor, ginger digger, company truck and an export office each make farming or shipping easier. From Level 10 you can buy whole new farms in <b>Business → Expansion</b> and travel between them.</p>
+          </section>
+          <section>
+            <h4>🚢 Easy exporting</h4>
+            <p>In <b>Trade</b>, each open contract shows a checklist of what is ready and what is wrong. <b>Prepare &amp; ship</b> repacks stock into sealed bags if needed and loads the truck in one click.</p>
           </section>
           <section>
             <h4>💾 Saving</h4>

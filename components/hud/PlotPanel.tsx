@@ -2,7 +2,7 @@
 import {
   COMPOST_COST, ENERGY, FERTILIZER_COST, GRADE_MULT, PREP, SEEDS, SOYBEAN_PRICE_PER_KG, SOYBEAN_SEED_COST, TREATMENTS,
   canHarvest, effectiveDrainage, expectedQuality, expectedYieldKg, getConsecutiveGingerCount, getRotationAdvice,
-  getSoilHealthRating, getSoilHealthScore, gradeForBatch, isUnlocked, isWet, lockedReason, money, plotName,
+  getSoilHealthRating, getSoilHealthScore, gradeForBatch, harvestEnergy, isUnlocked, isWet, lockedReason, money, plotName, prepCost,
 } from '../../game/simulation';
 import type { PrepMethod, SeedTier } from '../../game/types';
 import { useGameStore } from '../../stores/gameStore';
@@ -95,8 +95,8 @@ export default function PlotPanel() {
       {p.status === 'empty' && (
         <div className="choices">
           {(Object.keys(PREP) as PrepMethod[]).map(m => (
-            <button key={m} className="choice" onClick={() => s.prepare(p.id, m)} disabled={s.cash < PREP[m].cost || s.energy < PREP[m].energy}>
-              <strong>{PREP[m].label}</strong><span>{money(PREP[m].cost)} · {PREP[m].energy}⚡</span><small>{PREP[m].blurb}</small>
+            <button key={m} className="choice" onClick={() => s.prepare(p.id, m)} disabled={s.cash < prepCost(s, m) || s.energy < PREP[m].energy}>
+              <strong>{PREP[m].label}</strong><span>{money(prepCost(s, m))} · {PREP[m].energy}⚡</span><small>{PREP[m].blurb}</small>
             </button>
           ))}
         </div>
@@ -208,16 +208,16 @@ export default function PlotPanel() {
                 <button
                   className={`action ${p.status === 'ready' ? 'primary' : ''}`}
                   onClick={() => s.harvest(p.id)}
-                  disabled={s.energy < ENERGY.harvest}
+                  disabled={s.energy < harvestEnergy(s)}
                 >
                   <strong>🧺 Harvest Grain</strong>
-                  <small>{ENERGY.harvest}⚡</small>
+                  <small>{harvestEnergy(s)}⚡</small>
                 </button>
                 {isSoy && (
                   <button
                     className="action"
                     onClick={() => s.greenManure(p.id)}
-                    disabled={s.energy < ENERGY.harvest}
+                    disabled={s.energy < harvestEnergy(s)}
                     title="Incorporate legume biomass directly into topsoil without grain export"
                   >
                     <strong>🌿 Green Manure</strong>

@@ -57,6 +57,18 @@ export interface Plot {
   diseasePressure: Record<IssueKind, number>;
   /** Historical record of the last crops grown on this bed. */
   cropHistory: CropHistoryEntry[];
+  /** Which bought farm compound the bed belongs to. Missing = the home farm at Kafanchan. */
+  compound?: CompoundSiteId;
+}
+
+export type CompoundSiteId = 'kachia' | 'zonkwa' | 'jos';
+
+/** A second (or third...) farm bought away from the home farm. Its beds live in `GameState.plots`. */
+export interface Compound {
+  site: CompoundSiteId;
+  boughtDay: number;
+  /** Extra hectares leased next to this compound. */
+  leases: number;
 }
 
 export interface Batch {
@@ -129,6 +141,8 @@ export interface AutomationSettings {
   millPackaging: Packaging;
   /** Set eligible stock aside for active contracts each morning. */
   autoReserve: boolean;
+  /** Export office: load the truck as soon as an open contract has enough qualifying stock. */
+  autoShip?: boolean;
 }
 
 export interface AutomationSummary {
@@ -153,6 +167,8 @@ export interface AutomationSummary {
   milledBatches?: number;
   milledKg?: number;
   reservedKg?: number;
+  /** Contracts the export office dispatched this morning. */
+  shippedContracts?: number;
   /** Plain-language reasons automated jobs could not run this morning. */
   blocked?: string[];
 }
@@ -165,7 +181,19 @@ export interface InspectionReport {
   consequences: string[];
 }
 
-export interface Upgrades { irrigation: boolean; warehouseLevel: number; tankLevel: number; insurance: boolean; mill: boolean; solarDryer: boolean; factory: boolean; landLeased: number; }
+export interface Upgrades {
+  irrigation: boolean; warehouseLevel: number; tankLevel: number; insurance: boolean; mill: boolean; solarDryer: boolean; factory: boolean; landLeased: number;
+  /** Solar borehole pump: filling the tank costs no diesel. */
+  solarPump?: boolean;
+  /** Tractor: crews prepare and plant twice as many beds, and ridging costs less. */
+  tractor?: boolean;
+  /** Mechanical ginger digger: fewer broken rhizomes and faster harvests. */
+  digger?: boolean;
+  /** Company truck: cheaper, more reliable haulage. */
+  companyTruck?: boolean;
+  /** Export office & freight forwarder: half the export paperwork fees and automatic shipping. */
+  exportOffice?: boolean;
+}
 
 export interface Finance { revenue: number; expenses: number; wages: number; insurancePremiums: number; insurancePayouts: number; interest: number; maintenance: number; logistics: number; }
 
@@ -421,6 +449,8 @@ export interface GameState {
   contracts: Contract[];
   shipments: Shipment[];
   loans: Loan[];
+  /** Farms bought beyond the home farm. */
+  compounds: Compound[];
   /** Set after a loan default; lenders refuse new credit until it's repaid. */
   creditBlocked: boolean;
   levelUp: LevelUp | null;

@@ -66,7 +66,9 @@ export default function TitleScreen() {
             <button className="action" onClick={() => setDialog('settings')} disabled={!ready}><strong>Settings</strong></button>
           </div>
         </div>
-        <small className="title-foot">Progress saves automatically to this browser.</small>
+        <small className="title-foot">
+          Progress saves automatically to this browser. Nothing is sent to us. <a href="/privacy" target="_blank" rel="noopener">Privacy policy</a>
+        </small>
       </div>
 
       {dialog === 'confirm' && (

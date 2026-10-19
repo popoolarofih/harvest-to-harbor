@@ -28,7 +28,8 @@ function userDx(dx: number, dy: number) {
 }
 
 function resolveCollisions(p: Vector3) {
-  for (const [x0, z0, x1, z1] of COLLIDERS) {
+  // Bought compounds have no office, warehouse or shed to walk around.
+  for (const [x0, z0, x1, z1] of useGameStore.getState().site ? [] : COLLIDERS) {
     const a = x0 - BODY_RADIUS, b = z0 - BODY_RADIUS, c = x1 + BODY_RADIUS, d = z1 + BODY_RADIUS;
     if (p.x <= a || p.x >= c || p.z <= b || p.z >= d) continue;
     const push = [p.x - a, c - p.x, p.z - b, d - p.z];
@@ -42,11 +43,12 @@ function resolveCollisions(p: Vector3) {
 }
 
 function nearestTarget(pos: Vector3): Target | null {
-  const plots = useGameStore.getState().plots;
+  const { plots, site } = useGameStore.getState();
   const targets: Target[] = [
-    ...plots.map(p => ({ kind: 'plot', id: p.id }) as Target),
-    ...(Object.keys(STATIONS) as StationId[]).map(id => ({ kind: 'station', id }) as Target),
-    ...(Object.keys(NPC_SPOTS) as NpcId[]).map(id => ({ kind: 'npc', id }) as Target),
+    ...plots.filter(p => p.compound === site).map(p => ({ kind: 'plot', id: p.id }) as Target),
+    // Stations and characters only exist on the home farm.
+    ...(site ? [] : (Object.keys(STATIONS) as StationId[]).map(id => ({ kind: 'station', id }) as Target)),
+    ...(site ? [] : (Object.keys(NPC_SPOTS) as NpcId[]).map(id => ({ kind: 'npc', id }) as Target)),
   ];
   let best: Target | null = null, bestD = Infinity;
   for (const t of targets) {
@@ -65,6 +67,13 @@ export function Player() {
   const fx = useGameStore(s => s.fx);
 
   useEffect(() => { if (fx && ACTION_ANIM[fx.kind]) player.busy = 1.1; }, [fx]);
+  // Travelling to another farm puts the farmer at its gate path, facing the field.
+  const site = useGameStore(s => s.site);
+  const firstSite = useRef(true);
+  useEffect(() => {
+    if (firstSite.current) { firstSite.current = false; return; }
+    player.pos.set(0, 0, -7.5); player.goal = null; player.goalTarget = null; player.heading = 0;
+  }, [site]);
 
   useEffect(() => {
     const typing = (e: KeyboardEvent) => e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement;
@@ -283,7 +292,8 @@ const WORKER_VARIANTS = ['male-a', 'female-b', 'male-d', 'female-f', 'male-b', '
 function Worker({ index }: { index: number }) {
   const ref = useRef<Group>(null);
   const [anim, setAnim] = useState<CharacterAnim>('walk');
-  const isProcessing = useGameStore(s => index < (s.automation.processingWorkers ?? 0));
+  // At a bought compound there is no shed: everyone works the field.
+  const isProcessing = useGameStore(s => !s.site && index < (s.automation.processingWorkers ?? 0));
   const state = useRef({
     goal: new Vector3(),
     wait: index * 0.8,
@@ -298,10 +308,11 @@ function Worker({ index }: { index: number }) {
           const rackX = [-1.6, 0, 1.6][Math.floor(Math.random() * 3)];
           st.goal.set(STATIONS.shed.pos[0] + rackX + (Math.random() - 0.5) * 0.4, 0, STATIONS.shed.pos[2] + (Math.random() - 0.5) * 1.2);
         } else {
-          const { plots } = useGameStore.getState();
+          const { plots: all, site } = useGameStore.getState();
+          const plots = all.filter(p => p.compound === site);
           const pool = plots.some(p => p.status !== 'empty') ? plots.filter(p => p.status !== 'empty') : plots;
           const p = pool[Math.floor(Math.random() * pool.length)];
-          const [x, , z] = Math.random() < 0.1 ? STATIONS.shed.pos : plotPosition(p.x, p.z);
+          const [x, , z] = Math.random() < 0.1 && !site ? STATIONS.shed.pos : plotPosition(p.x, p.z);
           st.goal.set(x + (Math.random() - 0.5) * 1.4, 0, z + 0.95);
         }
         setAnim('walk');
@@ -401,13 +412,14 @@ function StationHitboxes() {
 }
 
 export default function Actors() {
+  const home = useGameStore(s => !s.site);
   return (
     <>
       <Player />
-      {(Object.keys(NPC_SPOTS) as NpcId[]).map(id => <Npc key={id} id={id} />)}
+      {home && (Object.keys(NPC_SPOTS) as NpcId[]).map(id => <Npc key={id} id={id} />)}
       <Workers />
-      <FarmTruck />
-      <StationHitboxes />
+      {home && <FarmTruck />}
+      {home && <StationHitboxes />}
       <Vehicle model="van" lane={0.85} speed={6} offset={0} />
       <Vehicle model="pickup" lane={-0.85} speed={-5} offset={50} />
       <Vehicle model="okada" lane={-0.85} speed={-8.5} offset={95} />

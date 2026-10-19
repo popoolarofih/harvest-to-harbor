@@ -1,5 +1,5 @@
 import {
-  CONSECUTIVE_GINGER_ROT_PENALTY, CONSECUTIVE_GINGER_YIELD_PENALTY, EARLY_HARVEST_GROWTH, ENERGY,
+  CONSECUTIVE_GINGER_ROT_PENALTY, CONSECUTIVE_GINGER_YIELD_PENALTY, DIGGER_YIELD_BONUS, EARLY_HARVEST_GROWTH, ENERGY, TRACTOR_PREP_DISCOUNT,
   FERTILIZER_COST, FERTILIZER_GAIN, FRESH_MOISTURE, PREP, SEEDS, SOYBEAN_BASE_YIELD_KG, SOYBEAN_NITROGEN_GAIN,
   SOYBEAN_OM_GAIN, SOYBEAN_ROT_SUPPRESSION, SOYBEAN_SEED_COST, TREATMENTS, WATER_MOISTURE_GAIN, WATER_PER_PLOT,
 } from './config';
@@ -13,18 +13,23 @@ import { recordLedgerEntry } from './ledger';
 
 const findPlot = (s: GameState, id: number) => s.plots.find(p => p.id === id);
 
+/** Land preparation cost after equipment: a tractor does the heavy work for less. */
+export const prepCost = (s: GameState, method: PrepMethod) => Math.round(PREP[method].cost * (s.upgrades.tractor ? 1 - TRACTOR_PREP_DISCOUNT : 1));
+/** Energy one harvest takes: a mechanical digger halves it. */
+export const harvestEnergy = (s: GameState) => (s.upgrades.digger ? Math.ceil(ENERGY.harvest / 2) : ENERGY.harvest);
+
 export function preparePlot(s: GameState, id: number, method: PrepMethod = 'clear'): GameState {
-  const p = findPlot(s, id), prep = PREP[method];
+  const p = findPlot(s, id), prep = PREP[method], cost = prepCost(s, method);
   if (!p || p.status !== 'empty') return fail(s, 'That plot is not available.');
-  const why = blocked(s, { energy: prep.energy, cash: prep.cost });
+  const why = blocked(s, { energy: prep.energy, cash: cost });
   if (why) return fail(s, why);
-  let next = updatePlot(spend(s, prep.cost, prep.energy), id, { status: 'prepared', ridged: method === 'ridge' });
-  if (prep.cost > 0) {
+  let next = updatePlot(spend(s, cost, prep.energy), id, { status: 'prepared', ridged: method === 'ridge' });
+  if (cost > 0) {
     next = recordLedgerEntry(next, {
       id: `prep-plot-${id}-${s.day}`,
       day: s.day,
       category: 'inputCost',
-      amount: prep.cost,
+      amount: cost,
       referenceId: id,
       description: `Land preparation (${prep.label}) for plot ${plotName(p)}`,
     });
@@ -224,7 +229,8 @@ export function canHarvest(p: { status: string; growth: number }) {
 export function harvestPlot(s: GameState, id: number): GameState {
   const p = findPlot(s, id);
   if (!p || !canHarvest(p)) return fail(s, `This crop is not ready. You can harvest early from ${EARLY_HARVEST_GROWTH}% growth.`);
-  const why = blocked(s, { energy: ENERGY.harvest });
+  const energy = harvestEnergy(s);
+  const why = blocked(s, { energy });
   if (why) return fail(s, why);
 
   if (p.crop === 'soybean') {
@@ -258,7 +264,7 @@ export function harvestPlot(s: GameState, id: number): GameState {
       greenManured: false,
     };
 
-    const next = updatePlot({ ...spend(s, 0, ENERGY.harvest), batches, nextId }, id, {
+    const next = updatePlot({ ...spend(s, 0, energy), batches, nextId }, id, {
       status: 'empty',
       crop: undefined,
       seed: null,
@@ -286,7 +292,7 @@ export function harvestPlot(s: GameState, id: number): GameState {
   // Ginger harvest
   const consecutive = getConsecutiveGingerCount(p);
   const penalty = consecutive > 0 && (p.organicMatter ?? 35) < 30 ? (1 - CONSECUTIVE_GINGER_YIELD_PENALTY) : 1;
-  const kg = Math.round(expectedYieldKg(p) * penalty);
+  const kg = Math.round(expectedYieldKg(p) * penalty * (s.upgrades.digger ? 1 + DIGGER_YIELD_BONUS : 1));
   const quality = expectedQuality(p), early = p.status !== 'ready';
   const moisture = FRESH_MOISTURE + (early ? 4 : 0);
 
@@ -319,7 +325,7 @@ export function harvestPlot(s: GameState, id: number): GameState {
   };
 
   const stats = { ...s.stats, harvestedKg: s.stats.harvestedKg + kg };
-  const next = updatePlot({ ...spend(s, 0, ENERGY.harvest), batches, nextId, stats }, id, {
+  const next = updatePlot({ ...spend(s, 0, energy), batches, nextId, stats }, id, {
     status: 'empty',
     crop: undefined,
     growth: 0,

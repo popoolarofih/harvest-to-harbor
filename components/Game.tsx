@@ -1,7 +1,7 @@
 'use client';
 import dynamic from 'next/dynamic';
 import { useEffect, useRef, useState } from 'react';
-import { WEATHER_INFO, dailyFixedCosts, maxEnergy, money, plotName, tankCapacity, titleFor } from '../game/simulation';
+import { WEATHER_INFO, compoundSite, dailyFixedCosts, maxEnergy, money, plotName, tankCapacity, titleFor } from '../game/simulation';
 import { currentStep } from '../game/tutorial';
 import { useGameStore, type Panel } from '../stores/gameStore';
 import { boot, setMusic, startNewSeason, useScreenTurn, useSession } from '../stores/session';
@@ -149,7 +149,10 @@ function Hud() {
   useEffect(() => { if (shipAt === null) return; const t = setTimeout(() => openPanel('trade'), 3500); return () => clearTimeout(t); }, [shipAt, openPanel]);
 
   const crops = s.plots.filter(p => p.status === 'growing' || p.status === 'ready');
-  const ready = s.plots.filter(p => p.status === 'ready');
+  const ready = s.plots.filter(p => p.status === 'ready' && p.compound === s.site);
+  const readyElsewhere = s.plots.filter(p => p.status === 'ready' && p.compound !== s.site).length;
+  const crewHarvests = (s.automation.fieldWorkers ?? 0) > 0 && (s.automation.autoHarvest ?? true);
+  const place = s.site ? compoundSite(s.site).place : 'Kafanchan';
   const freshKg = s.batches.filter(b => b.product === 'fresh').reduce((a, b) => a + b.kg, 0);
   const driedKg = s.batches.filter(b => b.product === 'dried').reduce((a, b) => a + b.kg, 0);
   const nightly = dailyFixedCosts(s);
@@ -209,7 +212,17 @@ function Hud() {
         >
           {compact ? '▸' : '✕'}
         </button>
-        <div className="eyebrow" onClick={() => setCompact(!compact)} style={{ cursor: 'pointer' }}>Season 01 · {s.profile.farmerName} · Kafanchan</div>
+        <div className="eyebrow" onClick={() => setCompact(!compact)} style={{ cursor: 'pointer' }}>Season 01 · {s.profile.farmerName} · {place}</div>
+        {(s.compounds ?? []).length > 0 && (
+          <div className="site-switch" role="group" aria-label="Travel between your farms" onClick={e => e.stopPropagation()}>
+            <button className={!s.site ? 'on' : ''} onClick={() => s.travel(undefined)} title={s.profile.farmName}>🏠 Home</button>
+            {s.compounds.map(c => (
+              <button key={c.site} className={s.site === c.site ? 'on' : ''} onClick={() => s.travel(c.site)} title={compoundSite(c.site).name}>
+                🌍 {compoundSite(c.site).place}
+              </button>
+            ))}
+          </div>
+        )}
         <XpBar />
         <TutorialCard />
         <MissionCard />
@@ -254,7 +267,7 @@ function Hud() {
                 <button className="action" onClick={s.pump} disabled={s.water >= tankCapacity(s)}><strong>⛽ Pump borehole</strong><small className="desktop-only">Fill water tank</small></button>
                 <button className="action mobile-hide-dup" onClick={() => setPanel('storage')}><strong>📦 Storage</strong><small>{Math.round(freshKg)} kg fresh · {Math.round(driedKg)} kg dried</small></button>
                 <button className="action mobile-hide-dup" onClick={() => setPanel('business')}><strong>🏗 Business</strong><small>Workers, loans & upgrades</small></button>
-                <button className="action" onClick={() => setBulkModal(true)}><strong>🚜 Bulk operations</strong><small className="desktop-only">Field automation</small></button>
+                <button className="action" onClick={() => setBulkModal(true)}><strong>🚜 Bulk operations</strong><small className="desktop-only">{(s.compounds ?? []).length ? 'Across all your farms' : 'Field automation'}</small></button>
               </div>
               {ready.length > 0 && (
                 <div
@@ -263,8 +276,11 @@ function Hud() {
                   title="Click to view ready plot"
                 >
                   🌾 Ready: {ready.map(plotName).join(', ')}
+                  {crewHarvests && <small className="chip-note"> · your crew lifts them tomorrow morning</small>}
                 </div>
               )}
+              {readyElsewhere > 0 && <div className="alert harvest-chip muted">🌾 {readyElsewhere} bed{readyElsewhere > 1 ? 's' : ''} ready on your other farm{(s.compounds ?? []).length > 1 ? 's' : ''}</div>}
+              {s.site && <div className="alert site-note">📍 {compoundSite(s.site).name}: no office here. Stock is trucked to the home warehouse.</div>}
             </div>
           )}
         </section>

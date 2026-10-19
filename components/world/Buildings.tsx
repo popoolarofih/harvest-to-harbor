@@ -3,10 +3,10 @@ import { Text } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
 import { useMemo, useRef } from 'react';
 import { CanvasTexture, RepeatWrapping, SRGBColorSpace, Shape, type Group, type Mesh } from 'three';
-import { SAFE_MOISTURE, storedKg, warehouseCapacity } from '../../game/simulation';
+import { SAFE_MOISTURE, compoundSite, plotsAt, storedKg, warehouseCapacity, type CompoundSiteId } from '../../game/simulation';
 import { useGameStore } from '../../stores/gameStore';
 import { BOREHOLE_POS, BUILDINGS, PLOT_SPACING, SIGNBOARD_POS, TANK_POS, plotPosition } from './layout';
-import { Model } from './models';
+import { Character, Model } from './models';
 
 function useCanvasTexture(draw: (ctx: CanvasRenderingContext2D, size: number) => void, repeat: [number, number]) {
   return useMemo(() => {
@@ -80,6 +80,80 @@ export function Farmhouse() {
       <Model model="barrel" position={[2.1, 0, b.size[1] / 2 + 0.5]} scale={2.6} />
       <Model model="bucket" position={[1.6, 0, b.size[1] / 2 + 0.6]} scale={2.6} />
       <Okada position={[-2.3, 0, b.size[1] / 2 + 1.2]} rotation={[0, 0.4, 0]} />
+      <ExportOfficeSign />
+    </group>
+  );
+}
+
+/** Once the export office opens, a painted board goes up over the farmhouse door. */
+function ExportOfficeSign() {
+  const open = useGameStore(s => !!s.upgrades.exportOffice);
+  const brand = useGameStore(s => s.profile.exportBrand);
+  if (!open) return null;
+  const d = BUILDINGS.office.size[1];
+  return (
+    <group position={[0, 3.1, d / 2 + 0.12]}>
+      <mesh><boxGeometry args={[3.6, 0.55, 0.06]} /><meshStandardMaterial color="#123a5a" /></mesh>
+      <Text position={[0, 0.07, 0.04]} fontSize={0.17} color="#ffd25a" anchorX="center">EXPORT OFFICE</Text>
+      <Text position={[0, -0.14, 0.04]} fontSize={0.11} color="#e6eef5" anchorX="center">{brand}</Text>
+    </group>
+  );
+}
+
+/** Equipment the player has bought, parked where they can see it. */
+export function Equipment() {
+  const solar = useGameStore(s => !!s.upgrades.solarPump);
+  const truck = useGameStore(s => !!s.upgrades.companyTruck);
+  const digger = useGameStore(s => !!s.upgrades.digger);
+  return (
+    <group>
+      {solar && <group position={[BOREHOLE_POS[0] + 0.4, 0, BOREHOLE_POS[2] + 2.2]}>
+        {[-0.9, 0.9].map(x => (
+          <group key={x} position={[x, 0, 0]}>
+            <mesh position={[0, 0.45, 0]}><cylinderGeometry args={[0.04, 0.04, 0.9, 6]} /><meshStandardMaterial color="#777" metalness={0.6} /></mesh>
+            <mesh position={[0, 0.95, 0]} rotation={[-0.6, 0, 0]} castShadow><boxGeometry args={[1.6, 0.05, 1]} /><meshStandardMaterial color="#1c2f5a" metalness={0.7} roughness={0.25} /></mesh>
+          </group>
+        ))}
+      </group>}
+      {truck && <group position={[-1.2, 0, -8.6]} rotation={[0, Math.PI / 2, 0]}>
+        <Model model="truck" scale={1.55} tint="#2f6b3a" />
+        <Text position={[0, 2.7, 0]} rotation={[0, -Math.PI / 2, 0]} fontSize={0.22} color="#fff6dc" outlineWidth={0.02} outlineColor="#1a120b">COMPANY TRUCK</Text>
+      </group>}
+      {digger && <group position={[8.2, 0, -9.6]} rotation={[0, -0.6, 0]}>
+        <mesh position={[0, 0.35, 0]} castShadow><boxGeometry args={[1.6, 0.25, 0.9]} /><meshStandardMaterial color="#c9761e" /></mesh>
+        {[-0.5, 0, 0.5].map(x => <mesh key={x} position={[x, 0.12, 0.5]} rotation={[0.6, 0, 0]}><boxGeometry args={[0.08, 0.4, 0.08]} /><meshStandardMaterial color="#555" metalness={0.6} /></mesh>)}
+        <Text position={[0, 0.9, 0]} fontSize={0.16} color="#fff6dc" outlineWidth={0.015} outlineColor="#1a120b">GINGER DIGGER</Text>
+      </group>}
+    </group>
+  );
+}
+
+/**
+ * A bought compound: no office or shed, just a caretaker's hut, a water drum and the gate sign.
+ * The harvest is trucked back to the main warehouse.
+ */
+export function Outpost({ site }: { site: CompoundSiteId }) {
+  const c = compoundSite(site);
+  const b = BUILDINGS.office;
+  const tractor = useGameStore(s => !!s.upgrades.tractor);
+  return (
+    <group>
+      <group position={[b.pos[0], 0, b.pos[2]]}>
+        <BlockBuilding w={4} d={3.4} h={2.5} wall="#e2cfa6" band="#6b7d3a" />
+        <Text position={[0, 2.2, 1.75]} fontSize={0.22} color="#3a2416" anchorX="center">CARETAKER</Text>
+        <Model model="barrel" position={[2.4, 0, 1.6]} scale={2.6} />
+        <Model model="sack" position={[-2.4, 0, 1.4]} scale={1.6} />
+        <Model model="sack" position={[-2.1, 0, 1.9]} scale={1.5} />
+        <Character variant="male-b" tone={4} anim="idle" position={[1.2, 0, 2.6]} rotation={[0, 0.3, 0]} />
+      </group>
+      <group position={[SIGNBOARD_POS[0], 0, SIGNBOARD_POS[2]]} rotation={[0, Math.PI * 0.45, 0]}>
+        <mesh position={[0, 0.9, 0]}><cylinderGeometry args={[0.07, 0.08, 1.8, 8]} /><meshStandardMaterial color="#5c432d" /></mesh>
+        <mesh position={[0, 1.45, 0]}><boxGeometry args={[2.4, 0.85, 0.1]} /><meshStandardMaterial color="#2d1e13" /></mesh>
+        <Text position={[0, 1.6, 0.06]} fontSize={0.18} color="#ffd25a" anchorX="center">{c.name}</Text>
+        <Text position={[0, 1.34, 0.06]} fontSize={0.12} color="#e5dfcf" anchorX="center">{`${c.place} · Ginger compound`}</Text>
+      </group>
+      <group position={[TANK_POS[0], 0, TANK_POS[2]]}><Model model="tank" scale={1.6} /></group>
+      {tractor && <Model model="tractor" position={[11.5, 0, -12]} rotation={[0, -Math.PI / 2, 0]} scale={1.5} />}
     </group>
   );
 }
@@ -231,7 +305,7 @@ export function WaterSystem() {
     if (jet.current) { jet.current.visible = pumping; jet.current.scale.y = 0.9 + Math.sin(clock.elapsedTime * 30) * 0.1; }
     if (genset.current) genset.current.position.y = pumping ? Math.sin(clock.elapsedTime * 60) * 0.015 : 0;
   });
-  const cols = useGameStore(s => 1 + Math.max(...s.plots.map(p => p.x)));
+  const cols = useGameStore(s => 1 + Math.max(...plotsAt(s.plots).map(p => p.x)));
   const rowZ = [0, 1, 2, 3].map(z => plotPosition(0, z)[2]);
   const fieldWest = plotPosition(0, 0)[0] - PLOT_SPACING / 2 - 0.2, fieldEast = plotPosition(cols - 1, 0)[0] + PLOT_SPACING / 2 + 0.2;
   return (

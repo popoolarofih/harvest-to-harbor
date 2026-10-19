@@ -1,8 +1,8 @@
 'use client';
 import { useState } from 'react';
 import {
-  HAULAGE, buyerOf, contractProductLabel, contractValue, dispatchCosts, eligibleKg, formatPrice, formatValue, getReservedKg, gradeLabel, isExport,
-  isUnlocked, lockedReason, money,
+  HAULAGE, ENERGY, UPGRADES, buyerOf, contractProductLabel, contractValue, dispatchCosts, eligibleKg, exportReadiness, formatPrice, formatValue,
+  getReservedKg, gradeLabel, haulageInfo, isExport, isUnlocked, lockedReason, money, recommendedDispatch,
 } from '../../game/simulation';
 import type { Contract, Haulage, Shipment } from '../../game/types';
 import { useGameStore } from '../../stores/gameStore';
@@ -25,6 +25,40 @@ function ContractHead({ c }: { c: Contract }) {
   </>;
 }
 
+const ISSUE_ICON = { packaging: '📦', damp: '💧', grade: '📉', soiled: '🟤', short: '⚖️' } as const;
+
+/** The easy path: what's ready, what's wrong and how to fix it, and one button that does the rest. */
+function ShipChecklist({ c }: { c: Contract }) {
+  const s = useGameStore();
+  const r = exportReadiness(s, c);
+  const rec = recommendedDispatch(s, c);
+  const costs = dispatchCosts(s, c, rec.haulage, rec.insured);
+  const total = costs.total + r.repackCost;
+  const ready = r.readyKg >= r.needKg;
+  const why = !r.canFill ? `${Math.max(0, r.needKg - r.readyKg - r.repackKg).toLocaleString()} kg short`
+    : s.cash < total ? `Need ${money(total)} for ${r.repackCost ? 'bags and ' : ''}logistics`
+    : s.energy < ENERGY.ship ? 'Not enough energy today' : null;
+  return (
+    <div className="ship-checklist">
+      <div className="checklist">
+        <div className={ready ? 'ok' : r.canFill ? 'fixable' : 'todo'}>
+          {ready ? '✅' : r.canFill ? '🛠️' : '⏳'} <b>{r.readyKg.toLocaleString()} / {r.needKg.toLocaleString()} kg</b> ready to go
+          {!ready && r.repackKg > 0 && <> · {r.repackKg.toLocaleString()} kg more after repacking ({money(r.repackCost)})</>}
+        </div>
+        {r.issues.map(i => (
+          <div key={i.kind} className={i.kind === 'packaging' ? 'fixable' : 'todo'}>
+            {ISSUE_ICON[i.kind]} {i.text} <small>{i.fix}</small>
+          </div>
+        ))}
+      </div>
+      <button className="action primary wide" disabled={!!why} onClick={() => s.quickShip(c.id)}>
+        <strong>⚡ Prepare &amp; ship</strong>
+        <small>{why ?? `${r.repackKg ? 'Repack, then load' : 'Load'} with ${haulageInfo(s, rec.haulage).label}${rec.insured ? ' + insurance' : ''} · ${money(total)}`}</small>
+      </button>
+    </div>
+  );
+}
+
 function DispatchForm({ c }: { c: Contract }) {
   const s = useGameStore();
   const [haulage, setHaulage] = useState<Haulage>('standard');
@@ -35,7 +69,8 @@ function DispatchForm({ c }: { c: Contract }) {
   const fleetLock = lockedReason(s, 'fleet'), insuranceLock = lockedReason(s, 'cargoInsurance');
   const short = have < c.kg;
   return (
-    <div className="dispatch">
+    <details className="dispatch">
+      <summary>Choose haulage and reservations yourself</summary>
       <div className="bar-label"><span>Eligible stock{isExport(c) ? ' (export-ready)' : ''}</span><b className={short ? 'warn' : ''}>{Math.round(have).toLocaleString()} / {c.kg.toLocaleString()} kg</b></div>
       <div className="progress"><i style={{ width: `${Math.min(100, (have / c.kg) * 100)}%` }} /></div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '8px 0', fontSize: '13.5px' }}>
@@ -66,8 +101,8 @@ function DispatchForm({ c }: { c: Contract }) {
       </div>
       <div className="seg">
         {(Object.keys(HAULAGE) as Haulage[]).map(h => (
-          <button key={h} className={h === haulage ? 'on' : ''} disabled={h === 'fleet' && !!fleetLock} onClick={() => setHaulage(h)} title={HAULAGE[h].blurb}>
-            {HAULAGE[h].label} <small>{Math.round(HAULAGE[h].breakdownChance * 100)}% breakdowns/day{h === 'fleet' && fleetLock ? ` · ${fleetLock}` : ''}</small>
+          <button key={h} className={h === haulage ? 'on' : ''} disabled={h === 'fleet' && !!fleetLock} onClick={() => setHaulage(h)} title={haulageInfo(s, h).blurb}>
+            {haulageInfo(s, h).label} <small>{Math.round(haulageInfo(s, h).breakdownChance * 100)}% breakdowns/day{h === 'fleet' && fleetLock ? ` · ${fleetLock}` : ''}</small>
           </button>
         ))}
       </div>
@@ -90,8 +125,23 @@ function DispatchForm({ c }: { c: Contract }) {
       <button className="action primary wide" disabled={short || s.cash < costs.total} onClick={() => s.dispatch(c.id, haulage, insured)}>
         <strong>🚛 Load the truck</strong><small>{short ? `${Math.round(c.kg - have)} kg short` : s.cash < costs.total ? 'Not enough cash for logistics' : `${buyerOf(c).name}: ${TERMS[c.terms].toLowerCase()}`}</small>
       </button>
-    </div>
+    </details>
   );
+}
+
+/** The export office ships for you; before it's bought, say what it would do. */
+function AutoShip() {
+  const s = useGameStore();
+  if (s.upgrades.exportOffice) {
+    return (
+      <label className="check auto-ship">
+        <input type="checkbox" checked={!!s.automation.autoShip} onChange={e => s.configureAutomation({ autoShip: e.target.checked })} />
+        <span><b>Export office ships for me.</b> Each morning, any open contract with enough qualifying stock is repacked and loaded automatically.</span>
+      </label>
+    );
+  }
+  const lock = lockedReason(s, 'exportOffice');
+  return <p className="muted small">💡 An <b>{UPGRADES.exportOffice.label}</b> ({money(UPGRADES.exportOffice.cost)}{lock ? `, ${lock.toLowerCase()}` : ', in Business → Operations'}) halves paperwork fees and ships ready contracts for you.</p>;
 }
 
 function ShipmentCard({ sh }: { sh: Shipment }) {
@@ -132,7 +182,8 @@ export default function TradePanel() {
 
     <h4>Open contracts</h4>
     {!active.length && <p className="muted">No open contracts.</p>}
-    {active.map(c => <div key={c.id} className="batch contract"><ContractHead c={c} /><DispatchForm c={c} /></div>)}
+    {active.length > 0 && <AutoShip />}
+    {active.map(c => <div key={c.id} className="batch contract"><ContractHead c={c} /><ShipChecklist c={c} /><DispatchForm c={c} /></div>)}
 
     <h4>Offers</h4>
     {boardLock && <p className="muted">Buyers start sending offers at Level 3.</p>}

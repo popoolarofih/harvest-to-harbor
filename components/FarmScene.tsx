@@ -2,12 +2,13 @@
 import { Canvas } from '@react-three/fiber';
 import { Suspense } from 'react';
 import Actors from './world/Actors';
-import { Farmhouse, FarmSignboard, ProcessingShed, Warehouse, WaterSystem } from './world/Buildings';
+import { Equipment, Farmhouse, FarmSignboard, Outpost, ProcessingShed, Warehouse, WaterSystem } from './world/Buildings';
 import Field from './world/Field';
 import { TutorialBeacon, WorldPrompt } from './world/Guides';
 import Nature from './world/Nature';
 import Weather from './world/Weather';
 import { view, walkTo } from './world/playerState';
+import { useGameStore } from '../stores/gameStore';
 
 /** Invisible ground plane: click anywhere to walk there. */
 function WalkPlane() {
@@ -27,6 +28,13 @@ function WalkPlane() {
   );
 }
 
+/** The home farm's buildings, or a bought compound's caretaker hut. */
+function Site() {
+  const site = useGameStore(s => s.site);
+  if (site) return <Outpost site={site} />;
+  return <><Farmhouse /><Warehouse /><ProcessingShed /><WaterSystem /><FarmSignboard /><Equipment /></>;
+}
+
 export default function FarmScene() {
   return (
     // offsetSize: measure the layout box, not the on-screen bounding box, so a CSS-rotated screen keeps the right aspect.
@@ -36,11 +44,7 @@ export default function FarmScene() {
       <Suspense fallback={null}>
         <Nature />
         <Field />
-        <Farmhouse />
-        <Warehouse />
-        <ProcessingShed />
-        <WaterSystem />
-        <FarmSignboard />
+        <Site />
         <Actors />
       </Suspense>
       <TutorialBeacon />
