@@ -12,10 +12,15 @@ import { recordLedgerEntry } from './ledger';
 
 const PRODUCT_NAME = { fresh: 'fresh ginger', dried: 'dried ginger', powder: 'ginger powder', soybean: 'soybean grain' } as const;
 
+/** True only while the batch is held for a contract that is still open. Leftover tags from shipped/failed contracts don't count. */
+export function isReservedNow(s: Pick<GameState, 'contracts'>, b: Pick<Batch, 'reservedFor'>): boolean {
+  return b.reservedFor != null && s.contracts.some(c => c.id === b.reservedFor && c.status === 'active');
+}
+
 export function sellBatch(s: GameState, batchId: number, buyerId: string): GameState {
   const batch = s.batches.find(b => b.id === batchId), buyer = BUYERS.find(b => b.id === buyerId);
   if (!batch || !buyer) return fail(s, 'That sale is no longer available.');
-  if (batch.reservedFor) return fail(s, 'This batch is reserved for an active contract. Release the reservation before selling.');
+  if (isReservedNow(s, batch)) return fail(s, 'This batch is reserved for an active contract. Release the reservation before selling.');
   const check = checkSale(s, batch, buyer);
   if (!check.ok) {
     const rejected = check.reason.startsWith('Rejected');
@@ -144,7 +149,7 @@ export function grindBatch(s: GameState, batchId: number, packaging: Packaging =
   if (!s.upgrades.mill) return fail(s, 'You need a hammer mill to make powder. Buy one in Business.');
   const b = s.batches.find(x => x.id === batchId);
   if (!b || b.product !== 'dried') return fail(s, 'Only dried ginger can be milled.');
-  if (b.reservedFor) return fail(s, 'This batch is reserved for an active contract and cannot be milled.');
+  if (isReservedNow(s, b)) return fail(s, 'This batch is reserved for an active contract and cannot be milled.');
   const cost = grindCost(s, b, packaging);
   const why = blocked(s, { energy: ENERGY.grind, cash: cost });
   if (why) return fail(s, why);

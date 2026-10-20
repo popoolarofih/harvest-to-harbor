@@ -9,8 +9,10 @@ export function InspectionModal() {
   return (
     <div className="modal-backdrop" onClick={clear}>
       <div className="modal inspection" onClick={e => e.stopPropagation()}>
-        <button className="close" onClick={clear}>Close</button>
-        <div className="eyebrow">Quality inspection</div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+          <div className="eyebrow" style={{ margin: 0 }}>Quality inspection</div>
+          <button className="close" onClick={clear} style={{ float: 'none', margin: 0, padding: '4px 12px', fontSize: '13px' }}>✕ Close</button>
+        </div>
         <h2>{r.title}</h2>
         <div className={`grade big g${r.grade}`}>Grade {r.grade}</div>
         {r.stats.map(st => <div key={st.label} className="modal-row"><span>{st.label}</span><b className={st.ok ? '' : 'warn'}>{st.value}{st.ok ? '' : ' ⚠'}</b></div>)}

@@ -83,38 +83,33 @@ export default function BusinessPanel() {
     </div>
 
     {/* Sub-navigation tabs */}
-    <div style={{ display: 'flex', gap: '8px', margin: '12px 0 20px', background: 'var(--panel2)', padding: '6px', borderRadius: '16px', border: '1.5px solid var(--green-border-subtle)' }}>
+    <div className="biz-subtabs">
       <button
         className={`tab ${activeTab === 'reports' ? 'active' : ''}`}
-        style={{ flex: 1, padding: '10px 14px', fontSize: '13px', fontWeight: 600, textAlign: 'center' }}
         onClick={() => setActiveTab('reports')}
       >
         📊 Financial Reports
       </button>
       <button
         className={`tab ${activeTab === 'operations' ? 'active' : ''}`}
-        style={{ flex: 1, padding: '10px 14px', fontSize: '13px', fontWeight: 600, textAlign: 'center' }}
         onClick={() => setActiveTab('operations')}
       >
         ⚙️ Operations & Loans
       </button>
       <button
         className={`tab ${activeTab === 'crew' ? 'active' : ''}`}
-        style={{ flex: 1, padding: '10px 14px', fontSize: '13px', fontWeight: 600, textAlign: 'center' }}
         onClick={() => setActiveTab('crew')}
       >
         👥 Crew ({s.crew?.length ?? 0})
       </button>
       <button
         className={`tab ${activeTab === 'expansion' ? 'active' : ''}`}
-        style={{ flex: 1, padding: '10px 14px', fontSize: '13px', fontWeight: 600, textAlign: 'center' }}
         onClick={() => setActiveTab('expansion')}
       >
         🌍 Expansion ({1 + (s.compounds?.length ?? 0)})
       </button>
       <button
         className={`tab ${activeTab === 'prestige' ? 'active' : ''}`}
-        style={{ flex: 1, padding: '10px 14px', fontSize: '13px', fontWeight: 600, textAlign: 'center' }}
         onClick={() => setActiveTab('prestige')}
       >
         🏆 Community ({(s.prestige?.length ?? 0)})
@@ -194,31 +189,31 @@ export default function BusinessPanel() {
         </div>
 
         {/* Statement Switcher */}
-        <div style={{ display: 'flex', gap: '6px', margin: '16px 0 12px', borderBottom: '1.5px solid var(--line)', paddingBottom: '8px' }}>
+        <div style={{ display: 'flex', gap: '6px', margin: '16px 0 12px', borderBottom: '1.5px solid var(--line)', paddingBottom: '8px', overflowX: 'auto', flexWrap: 'nowrap', WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none' }}>
           <button
             className={`tab ${statementView === 'pnl' ? 'active' : ''}`}
-            style={{ fontSize: '13px', padding: '8px 14px' }}
+            style={{ fontSize: '13px', padding: '8px 14px', flexShrink: 0, whiteSpace: 'nowrap' }}
             onClick={() => setStatementView('pnl')}
           >
             Income Statement (P&L)
           </button>
           <button
             className={`tab ${statementView === 'balance' ? 'active' : ''}`}
-            style={{ fontSize: '13px', padding: '8px 14px' }}
+            style={{ fontSize: '13px', padding: '8px 14px', flexShrink: 0, whiteSpace: 'nowrap' }}
             onClick={() => setStatementView('balance')}
           >
             Balance Sheet
           </button>
           <button
             className={`tab ${statementView === 'cashflow' ? 'active' : ''}`}
-            style={{ fontSize: '13px', padding: '8px 14px' }}
+            style={{ fontSize: '13px', padding: '8px 14px', flexShrink: 0, whiteSpace: 'nowrap' }}
             onClick={() => setStatementView('cashflow')}
           >
             Cash Flow
           </button>
           <button
             className={`tab ${statementView === 'ledger' ? 'active' : ''}`}
-            style={{ fontSize: '13px', padding: '8px 14px' }}
+            style={{ fontSize: '13px', padding: '8px 14px', flexShrink: 0, whiteSpace: 'nowrap' }}
             onClick={() => setStatementView('ledger')}
           >
             Audit Ledger ({filteredLedger.length})

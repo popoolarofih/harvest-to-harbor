@@ -248,6 +248,63 @@ describe('Phase 7: Field Automation, Factory Automation & Inventory', () => {
       s = releaseReservation(s, 101);
       expect(s.batches.every(b => !b.reservedFor)).toBe(true);
     });
+
+    it('prunes stale reservations when a contract is no longer active so products never get stuck', () => {
+      let s: GameState = {
+        ...initialState(),
+        batches: [
+          {
+            id: 1,
+            product: 'dried',
+            kg: 200,
+            quality: 85,
+            moisture: 9,
+            createdDay: 1,
+            packaging: 'sealed',
+            reservedFor: 101,
+          },
+          {
+            id: 2,
+            product: 'powder',
+            kg: 100,
+            quality: 80,
+            moisture: 8,
+            createdDay: 1,
+            packaging: 'sealed',
+            reservedFor: 102,
+          },
+        ],
+        contracts: [
+          // Contract 101 was shipped (no longer active)
+          {
+            id: 101,
+            buyerId: 'london',
+            product: 'dried',
+            minGrade: 'A',
+            kg: 500,
+            currency: 'USD',
+            pricePerKg: 3.5,
+            deadlineDay: 50,
+            latePenalty: 0.08,
+            terms: 'onDelivery',
+            status: 'shipping',
+            offerExpiresDay: 10,
+            advancePaid: 0,
+          },
+          // Contract 102 does not exist at all in contracts
+        ],
+      };
+
+      // Both batches have reservedFor pointing to non-active contracts
+      // They should be sellable immediately without getting blocked
+      const sold = sellBatch(s, 1, 'dryTraders');
+      expect(sold.toast).not.toContain('reserved');
+      expect(sold.batches.find(b => b.id === 1)).toBeUndefined(); // Batch 1 was sold!
+
+      // Batch 2 can be released directly by batchId
+      const released = releaseReservation(s, 102, 2);
+      expect(released.batches.find(b => b.id === 2)?.reservedFor).toBeNull();
+    });
   });
 
   describe('7.2 Factory Automation', () => {

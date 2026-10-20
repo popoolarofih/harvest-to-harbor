@@ -1,6 +1,7 @@
 // Versioned save format. Plain TypeScript (no browser APIs) so it can be unit-tested in node;
 // the browser storage adapter lives in stores/persistence.ts.
 import { CAMPAIGN } from './missions';
+import { pruneReservations } from './contracts';
 import { DEFAULT_PROFILE } from './config';
 import { initialState } from './state';
 import { TUTORIAL_STATUSES, type TutorialProgress } from './tutorial';
@@ -112,7 +113,8 @@ export function serializeSave(game: GameState, meta: SaveMeta, now = Date.now())
 
 /** The state to resume from: the saved simulation plus fresh values for presentation-only fields. */
 export function restoreGame(save: SaveFile): GameState {
-  return { ...save.game, toast: '', lastInspection: null };
+  const g: GameState = { ...save.game, toast: '', lastInspection: null };
+  return pruneReservations(g);
 }
 
 const kindOf = (v: unknown) => (v === null ? 'null' : Array.isArray(v) ? 'array' : typeof v);

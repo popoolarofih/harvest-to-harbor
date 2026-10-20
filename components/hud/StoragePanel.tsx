@@ -3,7 +3,7 @@ import { useState } from 'react';
 import {
   BUYERS, CUT, DEFAULT_PREP, GRIND_MAX_MOISTURE, GRIND_YIELD, PACKAGING, SAFE_MOISTURE, SORT, WASH, WEATHER_INFO,
   checkSale, dryKgOf, getInputPriceTrend, getInputUnitPrice, gradeForBatch, gradeLabel, grindCost, isExportReady, money, packagingCost, prepPlan, previewPurchase, rackCapacity, rackLoadKg, rackSpaceKg,
-  storedKg, valueOptions, warehouseCapacity, type InputItem,
+  storedKg, valueOptions, warehouseCapacity, buyerOf, isReservedNow, type InputItem,
 } from '../../game/simulation';
 import type { Batch, CutStyle, Packaging, PrepChoices, SortLevel, WashMethod } from '../../game/types';
 import { useGameStore } from '../../stores/gameStore';
@@ -29,14 +29,36 @@ const gradeChip = (b: Pick<Batch, 'product' | 'quality' | 'moisture' | 'packagin
   return <span className="grade-wrap"><span className={`grade g${g}`}>{gradeLabel(g)}</span><Tip text={GRADE_TIP} align="right" /></span>;
 };
 
+/** A batch locked to an open contract: say who it's for and let the player free it right here. */
+function ReservedNote({ batch }: { batch: Batch }) {
+  const s = useGameStore();
+  const c = batch.reservedFor ? s.contracts.find(x => x.id === batch.reservedFor) : null;
+  return (
+    <div className="reserved-banner">
+      <div className="reserved-info">
+        <span>🔒 {c ? <>Reserved for <b>{buyerOf(c).name}</b> (contract #{c.id}, due day {c.deadlineDay})</> : 'Reserved for active contract'}</span>
+        <small className="muted" style={{ display: 'block', fontSize: '12px', marginTop: '2px' }}>Held for contract fulfillment · tap Release to sell locally or mill.</small>
+      </div>
+      <button
+        className="action release-btn"
+        onClick={() => s.releaseReservation(batch.reservedFor ?? 0, batch.id)}
+        title="Release reservation so you can sell or mill this batch"
+      >
+        <strong>🔓 Release</strong>
+      </button>
+    </div>
+  );
+}
+
 function BuyerButtons({ batch }: { batch: Batch }) {
   const s = useGameStore();
+  if (isReservedNow(s, batch)) return <ReservedNote batch={batch} />;
   return (
     <div className="buyers">
       {BUYERS.filter(b => b.product === batch.product).map(b => {
         const check = checkSale(s, batch, b);
         return (
-          <button key={b.id} className="buyer" onClick={() => s.sell(batch.id, b.id)} title={b.blurb}>
+          <button key={b.id} className={`buyer ${check.ok ? '' : 'blocked'}`} onClick={() => s.sell(batch.id, b.id)} title={b.blurb}>
             <strong>{b.name}</strong>
             <span className={check.ok ? '' : 'warn'}>{check.ok ? money(check.revenue) : check.reason.replace(/^Rejected: /, '')}</span>
           </button>
@@ -169,14 +191,14 @@ export default function StoragePanel() {
       <div key={b.id} className="batch">
         <div className="batch-head"><b>Batch #{b.id} · {Math.round(b.kg).toLocaleString()} kg</b>{gradeChip(b)}</div>
         <small className="muted">Moisture {b.moisture.toFixed(1)}% · quality {Math.round(b.quality)}/100 · {b.packaging ? PACKAGING[b.packaging].label.toLowerCase() : 'loose'}{isExportReady(b) ? <> · ✈ export-ready <span className="brand-tag">★ {s.profile.exportBrand}</span></> : ''} <button className="link" onClick={() => s.inspectBatch(b.id)}>Inspect</button></small>
-        {s.upgrades.mill ? <>
+        {s.upgrades.mill && !isReservedNow(s, b) ? <>
           {b.moisture > GRIND_MAX_MOISTURE && <div className="alert">Above {GRIND_MAX_MOISTURE}% moisture: powder will cake in the mill.</div>}
           <div className="action-grid">
             {(Object.keys(PACKAGING) as Packaging[]).map(p => (
               <button key={p} className="action" onClick={() => s.grind(b.id, p)}><strong>⚙ Mill to powder ({PACKAGING[p].label.toLowerCase()})</strong><small>≈{Math.round(b.kg * GRIND_YIELD)} kg · {money(grindCost(s, b, p))}</small></button>
             ))}
           </div>
-        </> : <small className="muted">Buy a hammer mill (Business) to turn this into powder.</small>}
+        </> : !s.upgrades.mill && <small className="muted">Buy a hammer mill (Business) to turn this into powder.</small>}
         <BuyerButtons batch={b} />
       </div>
     ))}

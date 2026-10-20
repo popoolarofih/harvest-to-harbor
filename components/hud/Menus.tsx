@@ -95,8 +95,10 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal settings" role="dialog" aria-modal="true" aria-label="Settings" onClick={e => e.stopPropagation()}>
-        <button className="close" onClick={onClose}>Close</button>
-        <div className="eyebrow">Settings</div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+          <div className="eyebrow" style={{ margin: 0 }}>Settings</div>
+          <button className="close" onClick={onClose} style={{ float: 'none', margin: 0, padding: '4px 12px', fontSize: '13px' }}>✕ Close</button>
+        </div>
         <h2>Settings</h2>
         <h4>Screen</h4>
         <div className="seg" role="radiogroup" aria-label="Screen orientation">
@@ -171,8 +173,10 @@ export function HowToPlay({ onClose }: { onClose: () => void }) {
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal howto" role="dialog" aria-modal="true" aria-label="How to play" onClick={e => e.stopPropagation()}>
-        <button className="close" onClick={onClose}>Close</button>
-        <div className="eyebrow">How to play</div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+          <div className="eyebrow" style={{ margin: 0 }}>How to play</div>
+          <button className="close" onClick={onClose} style={{ float: 'none', margin: 0, padding: '4px 12px', fontSize: '13px' }}>✕ Close</button>
+        </div>
         <h2>Farm, process, export</h2>
         <div className="howto-grid">
           <section>

@@ -304,25 +304,36 @@ function Hud() {
 
       {panel !== 'farm' && (
         <div className="modal-backdrop" onClick={() => setPanel('farm')}>
-          <div className="modal" onClick={e => e.stopPropagation()}>
-            <button className="close" onClick={() => setPanel('farm')}>Close</button>
-            {panel === 'storage' && <StoragePanel />}
-            {panel === 'market' && <MarketPanel />}
-            {panel === 'trade' && <TradePanel />}
-            {panel === 'business' && <BusinessPanel />}
-            {panel === 'journal' && <>
-              <div className="eyebrow">Farmer&apos;s journal</div>
-              <h2>Farm to Fortune</h2>
-              <CampaignJournal />
-              <h4>Career</h4>
-              <CareerLadder />
-              <h4>What the farm is teaching you</h4>
-              {s.log.map((l, i) => <div key={i} className={`log ${l.severity}`}><small>Day {l.day}</small> {l.text}</div>)}
-              <div className="journal-actions">
-                <button className="action" onClick={s.replayTutorial} disabled={tutorialOn}><strong>🎓 Replay tutorial</strong><small>{tutorialOn ? 'Tutorial in progress' : 'Review farming basics'}</small></button>
-                <button className="action" onClick={() => setConfirmNew(true)}><strong>🌱 Start a new season</strong><small>Begin fresh season</small></button>
-              </div>
-            </>}
+          <div className="modal panel-modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-top-bar">
+              <span className="modal-top-title">
+                {panel === 'storage' && '📦 Storage & Processing'}
+                {panel === 'market' && '📈 Market & Prices'}
+                {panel === 'trade' && '🚢 Trade & Logistics'}
+                {panel === 'business' && '🏢 Agribusiness Management'}
+                {panel === 'journal' && '📖 Farmer’s Journal'}
+              </span>
+              <button className="close modal-close-btn" onClick={() => setPanel('farm')} aria-label="Close panel">✕ Close</button>
+            </div>
+            <div className="modal-body-content">
+              {panel === 'storage' && <StoragePanel />}
+              {panel === 'market' && <MarketPanel />}
+              {panel === 'trade' && <TradePanel />}
+              {panel === 'business' && <BusinessPanel />}
+              {panel === 'journal' && <>
+                <div className="eyebrow">Farmer&apos;s journal</div>
+                <h2>Farm to Fortune</h2>
+                <CampaignJournal />
+                <h4>Career</h4>
+                <CareerLadder />
+                <h4>What the farm is teaching you</h4>
+                {s.log.map((l, i) => <div key={i} className={`log ${l.severity}`}><small>Day {l.day}</small> {l.text}</div>)}
+                <div className="journal-actions">
+                  <button className="action" onClick={s.replayTutorial} disabled={tutorialOn}><strong>🎓 Replay tutorial</strong><small>{tutorialOn ? 'Tutorial in progress' : 'Review farming basics'}</small></button>
+                  <button className="action" onClick={() => setConfirmNew(true)}><strong>🌱 Start a new season</strong><small>Begin fresh season</small></button>
+                </div>
+              </>}
+            </div>
           </div>
         </div>
       )}

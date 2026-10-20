@@ -517,21 +517,28 @@ kbd {
    Toasts, Dialogs & Modals
    ============================================================ */
 .toast {
-  position: absolute;
+  position: fixed;
   left: 50%;
-  top: 96px;
+  top: calc(12px + env(safe-area-inset-top));
   transform: translateX(-50%);
-  background: var(--green2);
+  background: #064e3b;
   color: #ffffff;
-  padding: 12px 24px;
+  padding: 10px 20px;
   border-radius: 99px;
-  font-weight: 700;
-  font-size: 14px;
-  box-shadow: 0 10px 30px rgba(21, 128, 61, 0.35);
-  max-width: 90vw;
+  font-weight: 600;
+  font-size: 13.5px;
+  box-shadow: 0 8px 28px rgba(6, 78, 59, 0.35);
+  max-width: min(92vw, 500px);
   text-align: center;
   border: 1.5px solid var(--green-border);
-  z-index: 200;
+  z-index: 999;
+  pointer-events: none;
+  animation: toastIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes toastIn {
+  from { opacity: 0; transform: translate(-50%, -12px) scale(0.96); }
+  to { opacity: 1; transform: translate(-50%, 0) scale(1); }
 }
 
 .modal-backdrop {
@@ -559,6 +566,131 @@ kbd {
   padding: 24px 28px;
   box-shadow: var(--modal-shadow);
   color: var(--text);
+}
+
+/* Panel Modal (Storage, Market, Trade, Business, Journal) */
+.modal.panel-modal {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+  max-height: min(92vh, 800px);
+}
+
+.modal-top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 24px;
+  background: rgba(255, 255, 255, 0.98);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1.5px solid var(--green-border);
+  flex-shrink: 0;
+  z-index: 10;
+}
+
+.modal-top-title {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 16.5px;
+  font-weight: 700;
+  color: var(--green-dark);
+}
+
+.modal-close-btn {
+  float: none !important;
+  margin: 0 !important;
+  padding: 6px 14px !important;
+  font-size: 13px !important;
+  font-weight: 700 !important;
+  border-radius: 10px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+.modal-body-content {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 20px 24px 28px;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Business Sub-Navigation Tabs */
+.biz-subtabs {
+  display: flex;
+  gap: 6px;
+  margin: 12px 0 16px;
+  background: var(--panel2);
+  padding: 5px;
+  border-radius: 14px;
+  border: 1.5px solid var(--green-border-subtle);
+  overflow-x: auto;
+  flex-wrap: nowrap;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.biz-subtabs::-webkit-scrollbar {
+  display: none;
+}
+
+.biz-subtabs .tab {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  padding: 8px 14px;
+  font-size: 13px;
+  border-radius: 10px;
+  text-align: center;
+}
+
+@media (min-width: 769px) {
+  .biz-subtabs .tab {
+    flex: 1;
+  }
+}
+
+/* Reserved Stock Banner in Storage */
+.reserved-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: #eff6ff;
+  border: 1.5px solid #93c5fd;
+  margin-top: 8px;
+}
+
+.reserved-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.reserved-info span {
+  display: block;
+  font-size: 13px;
+  color: #1e3a8a;
+  font-weight: 600;
+}
+
+.reserved-info small {
+  color: #2563eb;
+}
+
+.release-btn {
+  padding: 6px 12px !important;
+  font-size: 12.5px !important;
+  background: #ffffff !important;
+  border-color: #3b82f6 !important;
+  color: #1e3a8a !important;
+  border-radius: 8px !important;
+  flex-shrink: 0;
+}
+
+.release-btn:hover {
+  background: #dbeafe !important;
 }
 
 /* Bulk Field Operations Modal Layout */
@@ -3802,7 +3934,20 @@ kbd {
   .modal.story, .modal.levelup {
     width: 100%;
   }
-  .modal .close {
+  .modal.panel-modal {
+    padding: 0 !important;
+    max-height: 92dvh;
+  }
+  .modal.panel-modal .modal-top-bar {
+    padding: 12px 16px;
+  }
+  .modal.panel-modal .modal-top-title {
+    font-size: 15px;
+  }
+  .modal.panel-modal .modal-body-content {
+    padding: 14px 16px calc(24px + env(safe-area-inset-bottom));
+  }
+  .modal:not(.panel-modal):not(.bulk-modal) .close {
     position: sticky;
     top: 0;
     z-index: 2;
@@ -3827,15 +3972,38 @@ kbd {
   .preview {
     grid-template-columns: 1fr 1fr;
   }
-  .decision.three {
+  .decision, .decision.three {
     grid-template-columns: 1fr;
+    gap: 8px;
+  }
+  .buyers {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+  .buyer {
+    padding: 9px 12px;
   }
   .crew-subgroup {
     grid-template-columns: 1fr;
     margin-left: 0;
   }
   .inventory-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 8px !important;
+    margin-bottom: 12px !important;
+  }
+  .inventory-grid div {
+    padding: 10px 12px !important;
+    border-radius: 14px !important;
+  }
+  .inventory-grid span {
+    font-size: 10.5px !important;
+    letter-spacing: .03em !important;
+  }
+  .inventory-grid b {
+    font-size: 17px !important;
+    margin-top: 2px !important;
+    line-height: 1.25 !important;
   }
   .journal-actions, .howto-grid {
     grid-template-columns: 1fr;

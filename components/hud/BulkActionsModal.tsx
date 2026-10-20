@@ -39,8 +39,10 @@ export default function BulkActionsModal({ onClose }: BulkActionsModalProps) {
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal bulk-modal" onClick={e => e.stopPropagation()}>
         <div className="bulk-header">
-          <button className="close" onClick={onClose} aria-label="Close modal">✕</button>
-          <div className="eyebrow">Operations · Field Automation</div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+            <div className="eyebrow" style={{ margin: 0 }}>Operations · Field Automation</div>
+            <button className="close" onClick={onClose} aria-label="Close modal" style={{ float: 'none', margin: 0, padding: '4px 12px', fontSize: '13px' }}>✕</button>
+          </div>
           <h2>🚜 Bulk Field Operations</h2>
           <p className="muted small">
             Batch-automate operations across multiple field beds.

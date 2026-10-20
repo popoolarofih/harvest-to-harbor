@@ -69,8 +69,10 @@ export default function ProfileModal({ onClose }: { onClose: () => void }) {
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal profile-modal" role="dialog" aria-modal="true" aria-label="Personalization" onClick={e => e.stopPropagation()}>
-        <button className="close" onClick={onClose} aria-label="Close dialog">Close</button>
-        <div className="eyebrow">Personalization &amp; Identity</div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+          <div className="eyebrow" style={{ margin: 0 }}>Personalization &amp; Identity</div>
+          <button className="close" onClick={onClose} aria-label="Close dialog" style={{ float: 'none', margin: 0, padding: '4px 12px', fontSize: '13px' }}>✕ Close</button>
+        </div>
         <h2>{profile.emblem} {profile.farmName}</h2>
 
         <div className="profile-tabs" role="tablist">

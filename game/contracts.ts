@@ -11,7 +11,7 @@ import type { Batch, Contract, GameState, Haulage, LogLine, Product, QualityGrad
 import { calculateCrewPerks } from './workers';
 import { recordLedgerEntry } from './ledger';
 import { checkPrestigeAchievements, recordGoalProgress } from './endgame';
-import { packagingCost } from './economy';
+import { isReservedNow, packagingCost } from './economy';
 
 export const buyerOf = (c: Pick<Contract, 'buyerId'>): TradeBuyer => TRADE_BUYERS.find(b => b.id === c.buyerId)!;
 export const isExport = (c: Pick<Contract, 'buyerId'>) => !buyerOf(c).domestic;
@@ -33,7 +33,7 @@ export function eligibleBatches(s: GameState, c: Contract): Batch[] {
   const exportOrder = isExport(c);
   return s.batches.filter(b => {
     // Stock reserved for another contract cannot be used
-    if (b.reservedFor && b.reservedFor !== c.id) return false;
+    if (b.reservedFor && b.reservedFor !== c.id && isReservedNow(s, b)) return false;
     // The campaign's first order takes dried ginger or powder.
     if (c.campaign ? b.product === 'fresh' : b.product !== c.product) return false;
     if (b.moisture > SAFE_MOISTURE || !gradeAtLeast(gradeForBatch(b), c.minGrade)) return false;
@@ -50,14 +50,31 @@ export function getTotalReservedKg(s: GameState): number {
   return s.batches.filter(b => b.reservedFor != null).reduce((sum, b) => sum + b.kg, 0);
 }
 
-export function releaseReservation(s: GameState, contractId: number): GameState {
-  const has = s.batches.some(b => b.reservedFor === contractId);
-  if (!has) return s;
-  const batches = s.batches.map(b => (b.reservedFor === contractId ? { ...b, reservedFor: null } : b));
-  return { ...s, batches, toast: 'Stock reservation released.' };
+export function releaseReservation(s: GameState, contractId: number, batchId?: number): GameState {
+  const matches = (b: Batch) => (batchId !== undefined ? b.id === batchId : b.reservedFor === contractId);
+  const has = s.batches.some(matches);
+  if (!has) {
+    if (batchId !== undefined && s.batches.some(b => b.id === batchId && b.reservedFor != null)) {
+      return {
+        ...s,
+        batches: s.batches.map(b => (b.id === batchId ? { ...b, reservedFor: null } : b)),
+        toast: 'Batch reservation released.',
+      };
+    }
+    return s;
+  }
+  const batches = s.batches.map(b => (matches(b) ? { ...b, reservedFor: null } : b));
+  return { ...s, batches, toast: batchId !== undefined ? 'Batch reservation released.' : 'Stock reservation released.' };
+}
+
+/** Drop reservation tags that point at contracts which are no longer open (shipped, failed, paid), so that stock can be sold again. */
+export function pruneReservations(s: GameState): GameState {
+  if (!s.batches.some(b => b.reservedFor != null && !isReservedNow(s, b))) return s;
+  return { ...s, batches: s.batches.map(b => (b.reservedFor != null && !isReservedNow(s, b) ? { ...b, reservedFor: null } : b)) };
 }
 
 export function reserveStock(s: GameState, contractId: number): GameState {
+  s = pruneReservations(s);
   const c = s.contracts.find(x => x.id === contractId && x.status === 'active');
   if (!c) return fail(s, 'Only active contracts can reserve stock.');
   const already = getReservedKg(s, contractId);
@@ -160,7 +177,7 @@ export function tickContracts(s: GameState, rng: Rng, lines: LogLine[]): GameSta
       lines.push({ text: `${b.flag} New contract offer from ${b.name}: ${offer.kg.toLocaleString()} kg ${contractProductLabel(offer)}, ${formatValue(offer)}.`, severity: 'info' });
     }
   }
-  return next;
+  return pruneReservations(next);
 }
 
 export function acceptContract(s: GameState, id: number): GameState {
@@ -247,13 +264,13 @@ export function dispatchContract(s: GameState, id: number, haulage: Haulage = 's
     events: [{ day: s.day, text: `Loaded ${c.kg.toLocaleString()} kg at the farm. ${haulageInfo(s, haulage).label} heading for ${exportOrder ? 'Lagos' : buyerOf(c).port}.`, severity: 'info' }],
   };
   const spent = spend(s, costs.total, byCrew ? 0 : ENERGY.ship);
-  let next: GameState = {
+  let next: GameState = pruneReservations({
     ...spent, batches, nextId: s.nextId + 1, shipments: [...s.shipments, shipment],
     contracts: s.contracts.map(x => (x.id === id ? { ...x, status: 'shipping' as const } : x)),
     flags: { ...s.flags, shipments: s.flags.shipments + 1 },
     stats: { ...s.stats, exportedKg: s.stats.exportedKg + (exportOrder ? c.kg : 0) },
     finance: { ...spent.finance, logistics: spent.finance.logistics + costs.total },
-  };
+  });
   if (costs.total > 0) {
     next = recordLedgerEntry(next, {
       id: `dispatch-shipment-${shipment.id}`,
@@ -283,7 +300,7 @@ export interface ExportReadiness {
 
 /** Stock of the right product that isn't promised to another contract. */
 function candidateBatches(s: GameState, c: Contract) {
-  return s.batches.filter(b => (!b.reservedFor || b.reservedFor === c.id) && (c.campaign ? b.product === 'dried' || b.product === 'powder' : b.product === c.product));
+  return s.batches.filter(b => (!b.reservedFor || b.reservedFor === c.id || !isReservedNow(s, b)) && (c.campaign ? b.product === 'dried' || b.product === 'powder' : b.product === c.product));
 }
 
 /** Batches that qualify once they are in sealed bags (export only). */

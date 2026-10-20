@@ -86,7 +86,7 @@ interface Actions {
   buyInput: (item: sim.InputItem, quantity: number) => void;
   executeBulk: (kind: sim.BulkActionKind, options?: sim.BulkOptions, allowPartial?: boolean) => void;
   reserveContract: (contractId: number) => void;
-  releaseReservation: (contractId: number) => void;
+  releaseReservation: (contractId: number, batchId?: number) => void;
   enterSandbox: () => void;
   respondCoop: (eventId: string, choice: 'accept' | 'decline') => void;
   buyCompound: (site: CompoundSiteId) => void;
@@ -174,7 +174,7 @@ export const useGameStore = create<Store>((set, get) => {
     buyInput: (item, quantity) => apply(s => sim.buyInputStock(s, item, quantity)),
     executeBulk: (kind, options, allowPartial) => apply(s => sim.executeBulk(s, kind, options, allowPartial, s.opSeq)),
     reserveContract: contractId => apply(s => sim.reserveStock(s, contractId)),
-    releaseReservation: contractId => apply(s => sim.releaseReservation(s, contractId)),
+    releaseReservation: (contractId, batchId) => apply(s => sim.releaseReservation(s, contractId, batchId)),
     enterSandbox: () => apply(sim.enterSandboxMode),
     respondCoop: (eventId, choice) => apply(s => sim.respondToCooperativeEvent(s, eventId, choice)),
     buyCompound: site => apply(s => sim.buyCompound(s, site)),
