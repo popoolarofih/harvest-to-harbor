@@ -9,6 +9,15 @@ export const NPCS: Record<NpcId, { name: string; role: string; greeting: string 
   baba: { name: 'Baba Musa', role: 'Experienced farmer', greeting: 'Ah, my friend. Walk the beds every few days; the soil tells you what it needs.' },
   amaka: { name: 'Amaka', role: 'Agribusiness & export consultant', greeting: 'Every kilo you process well is worth more than the kilo you sell in a hurry.' },
   chinedu: { name: 'Chinedu', role: 'Logistics operator', greeting: 'Good produce is only worth something once it reaches the buyer in good shape.' },
+  hauwa: { name: 'Hauwa', role: 'Drying & quality supervisor', greeting: 'Dry ginger is honest ginger. Bring the moisture down slowly and evenly, and keep the racks clean.' },
+};
+
+/** Short spoken lines each character greets the player with (voiced in the browser when voices are on). */
+export const NPC_QUIPS: Record<NpcId, string> = {
+  baba: 'Sannu da aiki! The soil is blessed today.',
+  amaka: 'Well done! Remember, London buyers want zero foreign matter.',
+  chinedu: 'My trucks are fueled. We move straight to Apapa!',
+  hauwa: "Watch that moisture. We don't want mold on the racks.",
 };
 
 /** Context-aware tips, most urgent first. Pure function so NPCs stay testable and UI-agnostic. */
@@ -45,6 +54,16 @@ export function npcAdvice(s: GameState, id: NpcId): string[] {
     const fresh = s.batches.find(b => b.product === 'fresh');
     if (fresh && fresh.kg < 500) tips.push('The Kaduna aggregator will not send a truck for under 500 kg. Combine your harvests, or sell small lots at Kafanchan market.');
     if (!tips.length) tips.push('One day we will load your ginger in a container at Lagos. For now, learn to move it from farm to buyer without losing quality.');
+  }
+  if (id === 'hauwa') {
+    const wet = s.dryingJobs.filter(j => j.moisture > SAFE_MOISTURE).sort((a, b) => b.moisture - a.moisture)[0];
+    if (wet) tips.push(`Rack #${wet.id} is at ${wet.moisture.toFixed(1)}% moisture. Turn the slices and keep it open on sunny days; it is safe to bag at ${SAFE_MOISTURE}% or below.`);
+    const rainSoon = s.forecast.slice(0, 2).find(f => WEATHER_INFO[f.weather].dryingMoisture > 0);
+    if (rainSoon && s.dryingJobs.some(j => !j.covered)) tips.push(`Rain on day ${rainSoon.day}. Get the tarpaulins over the racks tonight; wet slices go mouldy in two days.`);
+    const done = s.dryingJobs.find(j => j.moisture <= SAFE_MOISTURE);
+    if (done) tips.push(`Rack #${done.id} is dry. Bag it in sealed polythene if it is going abroad: damp air at the port undoes your work.`);
+    if (s.batches.some(b => b.soiled)) tips.push('Some of your stock still carries soil. Export inspectors call that foreign matter. Wash properly in the troughs before slicing.');
+    if (!tips.length) tips.push('Thin, even slices dry evenly. Thick pieces stay wet in the middle and that is where mould starts.');
   }
   return tips.slice(0, 3);
 }

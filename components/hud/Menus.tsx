@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { SAFE_MOISTURE } from '../../game/simulation';
 import { useSaveStatus } from '../../stores/persistence';
-import { resetSave, rotateScreen, setEffects, setEffectsVolume, setMotion, setMusic, setMusicVolume, setOrientation, toTitle, useSession, useSettings, type MotionPref, type OrientationPref } from '../../stores/session';
+import { resetSave, rotateScreen, setAmbienceOn, setEffects, setEffectsVolume, setVoices, setMotion, setMusic, setMusicVolume, setOrientation, toTitle, useSession, useSettings, type MotionPref, type OrientationPref } from '../../stores/session';
 
 /** "Saved just now" / "Saved at 14:05" / "Saved 3 Oct, 14:05". */
 export function savedLabel(at: number | null, now = Date.now()) {
@@ -85,6 +85,8 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
   const orientation = useSettings(s => s.orientation);
   const music = useSettings(s => s.music);
   const effects = useSettings(s => s.effects);
+  const ambience = useSettings(s => s.ambience);
+  const voices = useSettings(s => s.voices);
   const musicVolume = useSettings(s => s.musicVolume);
   const effectsVolume = useSettings(s => s.effectsVolume);
   const savedAt = useSaveStatus(s => s.savedAt), error = useSaveStatus(s => s.error);
@@ -114,6 +116,8 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
         <div className="seg" role="group" aria-label="Audio settings">
           <button role="switch" aria-checked={music} className={music ? 'on' : ''} onClick={() => setMusic(!music)}>Music</button>
           <button role="switch" aria-checked={effects} className={effects ? 'on' : ''} onClick={() => setEffects(!effects)}>Sound effects</button>
+          <button role="switch" aria-checked={ambience} className={ambience ? 'on' : ''} onClick={() => setAmbienceOn(!ambience)}>Ambience</button>
+          <button role="switch" aria-checked={voices} className={voices ? 'on' : ''} onClick={() => setVoices(!voices)}>Voices</button>
         </div>
         <div className="audio-levels">
           <label>Music volume <input type="range" min="0" max="1" step="0.05" value={musicVolume} onChange={e => setMusicVolume(Number(e.target.value))} /></label>

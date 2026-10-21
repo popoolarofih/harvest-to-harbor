@@ -1,5 +1,5 @@
 'use client';
-import { LITRES_PER_FUEL_LITRE, NPCS, currentMission, fuelPrice, money, npcAdvice, plotName, tankCapacity } from '../../game/simulation';
+import { LITRES_PER_FUEL_LITRE, NPCS, NPC_QUIPS, currentMission, fuelPrice, money, npcAdvice, plotName, tankCapacity } from '../../game/simulation';
 import { useGameStore, type Target } from '../../stores/gameStore';
 import { STATIONS } from '../world/layout';
 
@@ -47,6 +47,7 @@ export function NpcCard() {
       <div className="eyebrow">{npc.role}</div>
       <h3>{npc.name}</h3>
       <p className="quote">“{theirs ? theirs.intro : npc.greeting}”</p>
+      <p className="small muted">🗣 “{NPC_QUIPS[s.talkingTo]}”</p>
       {theirs && <p className="tip mission-tip"><b>{theirs.title}:</b> {theirs.hint}</p>}
       {tips.map(t => <p key={t} className="tip">{t}</p>)}
     </div>

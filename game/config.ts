@@ -225,6 +225,11 @@ export const HAULAGE = {
 } as const;
 export const ROAD_DAYS = 3;
 export const PORT_DAYS = 2;
+/** Toll for the quick Niger crossing at Lokoja, on the road to Lagos. */
+export const LOKOJA_TOLL = 12_000;
+/** Odds the free bush bypass around Lokoja costs a day and splits a few bags. */
+export const BYPASS_TROUBLE_CHANCE = 0.5;
+export const BYPASS_DAMAGE = 0.03;
 export const EXPORT_FEES = 220_000; // documentation, phytosanitary certificate, port handling, container
 export const DEMURRAGE_PER_DAY = 25_000;
 export const CARGO_INSURANCE_RATE = 0.02;

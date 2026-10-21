@@ -7,6 +7,7 @@ import {
 import type { Contract, Haulage, Shipment } from '../../game/types';
 import { useGameStore } from '../../stores/gameStore';
 import JourneyMap from './JourneyMap';
+import { ExportCertificate, FerryChoicePanel, PortScene } from './PortDrama';
 
 const TERMS = { advance: '30% advance, rest on delivery', onDelivery: 'Paid on delivery', net30: 'Paid 30 days after delivery' } as const;
 const STAGE = { road: 'On the road', port: 'At Apapa port', sea: 'At sea', delivered: 'Delivered, awaiting payment', paid: 'Paid', lost: 'Lost' } as const;
@@ -160,6 +161,9 @@ function ShipmentCard({ sh }: { sh: Shipment }) {
         </div>
       )}
       <JourneyMap shipment={sh} buyer={b} />
+      <FerryChoicePanel sh={sh} />
+      <PortScene stage={sh.stage} />
+      {isExport(c) && <ExportCertificate sh={sh} c={c} />}
       <ul className="ship-events">{[...sh.events].reverse().slice(0, 5).map((e, i) => <li key={i} className={e.severity}><small>Day {e.day}</small> {e.text}</li>)}</ul>
       {sh.stage === 'delivered' && sh.payDay !== null && <small className="muted">Payment expected on day {sh.payDay}.</small>}
     </div>

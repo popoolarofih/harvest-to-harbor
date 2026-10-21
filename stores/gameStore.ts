@@ -3,8 +3,8 @@ import { create } from 'zustand';
 import { restoreGame, type SaveFile, type SaveMeta } from '../game/save';
 import * as sim from '../game/simulation';
 import { TUTORIAL_START, signalsBetween, skipStep, stepTutorial, type TutorialProgress } from '../game/tutorial';
-import type { AutomationSettings, CompoundSiteId, CropType, GameState, Haulage, Packaging, PrepChoices, PrepMethod, SeedTier } from '../game/types';
-import { playAction } from '../lib/audio';
+import type { AutomationSettings, CompoundSiteId, CropType, FerryChoice, GameState, Haulage, Packaging, PrepChoices, PrepMethod, SeedTier } from '../game/types';
+import { playAction, speak } from '../lib/audio';
 
 export type Panel = 'farm' | 'storage' | 'market' | 'trade' | 'business' | 'journal';
 export type StationId = 'tank' | 'shed' | 'warehouse' | 'office' | 'truck' | 'signboard';
@@ -50,6 +50,8 @@ interface Actions {
   accept: (contractId: number) => void;
   decline: (contractId: number) => void;
   dispatch: (contractId: number, haulage: Haulage, insured: boolean) => void;
+  /** Decide how a truck gets past the Lokoja river crossing. */
+  chooseFerry: (shipmentId: number, choice: FerryChoice) => void;
   borrow: (index: number) => void;
   repay: (loanId: number) => void;
   financeUpgrade: (id: sim.UpgradeId) => void;
@@ -143,6 +145,7 @@ export const useGameStore = create<Store>((set, get) => {
     grind: (batchId, packaging) => act('grind', s => sim.grindBatch(s, batchId, packaging)),
     accept: id => apply(s => sim.acceptContract(s, id)),
     decline: id => apply(s => sim.declineContract(s, id)),
+    chooseFerry: (shipmentId, choice) => apply(s => sim.chooseFerry(s, shipmentId, choice)),
     dispatch: (id, haulage, insured) => act('ship', s => sim.dispatchContract(s, id, haulage, insured)),
     borrow: index => apply(s => sim.takeLoan(s, index)),
     repay: id => apply(s => sim.repayLoan(s, id)),
@@ -188,7 +191,8 @@ export const useGameStore = create<Store>((set, get) => {
     // Called every frame by the player: only touch the store when the target actually changes,
     // otherwise every subscriber (the whole HUD) would re-render at 60 fps.
     setNearby: t => { if (!sameTarget(get().nearby, t)) set({ nearby: t }); },
-    interact: t => set(() => {
+    interact: t => set(s0 => {
+      if (t.kind === 'npc' && s0.talkingTo !== t.id) speak(t.id, sim.NPC_QUIPS[t.id]);
       const closed = { selectedPlot: null, talkingTo: null, tankOpen: false, customizingProfile: false };
       if (t.kind === 'plot') return { ...closed, selectedPlot: t.id };
       if (t.kind === 'npc') return { ...sim.talkTo(get(), t.id), ...closed, talkingTo: t.id };

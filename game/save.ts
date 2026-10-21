@@ -7,7 +7,7 @@ import { initialState } from './state';
 import { TUTORIAL_STATUSES, type TutorialProgress } from './tutorial';
 import type { GameState } from './types';
 
-export const SAVE_VERSION = 4;
+export const SAVE_VERSION = 5;
 export const SAVE_KEY = 'h2h.save';
 /** Where an unreadable save is copied before anything else may overwrite the main slot. */
 export const UNREADABLE_KEY = 'h2h.save.unreadable';
@@ -102,6 +102,12 @@ export const MIGRATIONS: Record<number, Migration> = {
         compounds: Array.isArray(game?.compounds) ? game.compounds : [],
       },
     };
+  },
+  // v5: Hauwa, the drying & quality supervisor, joins the farm.
+  4: (data: Json) => {
+    const game = data.game as Json;
+    const flags = (game?.flags as Json) || {};
+    return { ...data, game: { ...game, flags: { ...flags, talked: { hauwa: 0, ...((flags.talked as Json) || {}) } } } };
   },
 };
 

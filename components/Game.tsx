@@ -19,6 +19,7 @@ import TradePanel from './hud/TradePanel';
 import ProfileModal from './hud/ProfileModal';
 import BulkActionsModal from './hud/BulkActionsModal';
 import { NpcCard, TankCard } from './hud/WorldCards';
+import { endDayWithTransition } from './world/timeOfDay';
 import { faceNorth, rotateStep, setCameraMode, toggleCameraMode, view, zoomBy } from './world/playerState';
 import { enableAudio, playClick, setAudioPreferences } from '../lib/audio';
 import { useSettings } from '../stores/session';
@@ -41,14 +42,15 @@ export default function Game() {
   const phase = useSession(s => s.phase);
   const theme = useGameStore(s => s.profile.theme);
   const music = useSettings(s => s.music), effects = useSettings(s => s.effects);
+  const ambience = useSettings(s => s.ambience), voices = useSettings(s => s.voices);
   const musicVolume = useSettings(s => s.musicVolume), effectsVolume = useSettings(s => s.effectsVolume);
   // When the orientation setting disagrees with how the device is held, the whole game is turned with CSS.
   const turn = useScreenTurn(s => s.turn);
   // Storage is only read on the client, after hydration, so the server and first client render match.
   useEffect(() => { boot(); }, []);
   useEffect(() => {
-    setAudioPreferences(music, effects, musicVolume, effectsVolume);
-  }, [music, effects, musicVolume, effectsVolume]);
+    setAudioPreferences(music, effects, musicVolume, effectsVolume, ambience, voices);
+  }, [music, effects, musicVolume, effectsVolume, ambience, voices]);
   useEffect(() => {
     const onPointerDown = () => enableAudio();
     const onClick = (event: MouseEvent) => {
@@ -146,7 +148,7 @@ function Hud() {
   useEffect(() => { if (!s.toast) return; const t = setTimeout(s.clearToast, 3600); return () => clearTimeout(t); }, [s.toast, s.clearToast]);
   // After the truck pulls out of the gate, follow the shipment on the map.
   const shipAt = s.fx?.kind === 'ship' ? s.fx.at : null, openPanel = s.openPanel;
-  useEffect(() => { if (shipAt === null) return; const t = setTimeout(() => openPanel('trade'), 3500); return () => clearTimeout(t); }, [shipAt, openPanel]);
+  useEffect(() => { if (shipAt === null) return; const t = setTimeout(() => openPanel('trade'), 14500); return () => clearTimeout(t); }, [shipAt, openPanel]);
 
   const crops = s.plots.filter(p => p.status === 'growing' || p.status === 'ready');
   const ready = s.plots.filter(p => p.status === 'ready' && p.compound === s.site);
@@ -263,7 +265,7 @@ function Hud() {
                 <span className="hint-touch">Tap to walk & interact · Pinch zoom</span>
               </p>
               <div className="action-grid">
-                <button className="action primary" data-tut="end-day" onClick={s.advance}><strong>🌙 End day</strong><small>{nightly > 0 ? `${money(nightly)} nightly costs` : 'Advance day'}</small></button>
+                <button className="action primary" data-tut="end-day" onClick={() => endDayWithTransition(s.advance)}><strong>🌙 End day</strong><small>{nightly > 0 ? `${money(nightly)} nightly costs` : 'Advance day'}</small></button>
                 <button className="action" onClick={s.pump} disabled={s.water >= tankCapacity(s)}><strong>⛽ Pump borehole</strong><small className="desktop-only">Fill water tank</small></button>
                 <button className="action mobile-hide-dup" onClick={() => setPanel('storage')}><strong>📦 Storage</strong><small>{Math.round(freshKg)} kg fresh · {Math.round(driedKg)} kg dried</small></button>
                 <button className="action mobile-hide-dup" onClick={() => setPanel('business')}><strong>🏗 Business</strong><small>Workers, loans & upgrades</small></button>

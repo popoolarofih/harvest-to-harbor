@@ -108,7 +108,7 @@ export function initialState(seed = 20261010): GameState {
     finance: { revenue: 0, expenses: 0, wages: 0, insurancePremiums: 0, insurancePayouts: 0, interest: 0, maintenance: 0, logistics: 0 },
     missions: initialMissions(),
     stats: { harvestedKg: 0, freshSoldKg: 0, processedKg: 0, safeDriedKg: 0, powderKg: 0, exportedKg: 0 },
-    flags: { talked: { baba: 0, amaka: 0, chinedu: 0 }, stormDay: null, stormOutcome: null, exportUnlocked: false, shipments: 0 },
+    flags: { talked: { baba: 0, amaka: 0, chinedu: 0, hauwa: 0 }, stormDay: null, stormOutcome: null, exportUnlocked: false, shipments: 0 },
     missionBase: 0,
     story: { speaker: CAMPAIGN[0].npc, title: `Mission 1: ${CAMPAIGN[0].title}`, text: CAMPAIGN[0].intro },
     contracts: [], shipments: [], loans: [], compounds: [], creditBlocked: false, levelUp: null,

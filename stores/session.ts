@@ -66,7 +66,7 @@ export type MotionPref = 'system' | 'reduce' | 'full';
 /** auto follows the device; landscape/portrait keep the game that way up even if the device can't rotate the page. */
 export type OrientationPref = 'auto' | 'landscape' | 'portrait';
 const SETTINGS_KEY = 'h2h.settings';
-export const useSettings = create<{ motion: MotionPref; orientation: OrientationPref; music: boolean; effects: boolean; musicVolume: number; effectsVolume: number }>(() => ({ motion: 'system', orientation: 'auto', music: true, effects: true, musicVolume: 0.55, effectsVolume: 0.65 }));
+export const useSettings = create<{ motion: MotionPref; orientation: OrientationPref; music: boolean; effects: boolean; ambience: boolean; voices: boolean; musicVolume: number; effectsVolume: number }>(() => ({ motion: 'system', orientation: 'auto', music: true, effects: true, ambience: true, voices: true, musicVolume: 0.55, effectsVolume: 0.65 }));
 
 const systemReduced = () => typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 /** Read by per-frame animation code, so it's a plain getter rather than a hook. */
@@ -85,6 +85,8 @@ function loadSettings() {
     if (o === 'auto' || o === 'landscape' || o === 'portrait') useSettings.setState({ orientation: o });
     if (typeof saved.music === 'boolean') useSettings.setState({ music: saved.music });
     if (typeof saved.effects === 'boolean') useSettings.setState({ effects: saved.effects });
+    if (typeof saved.ambience === 'boolean') useSettings.setState({ ambience: saved.ambience });
+    if (typeof saved.voices === 'boolean') useSettings.setState({ voices: saved.voices });
     if (typeof saved.musicVolume === 'number') useSettings.setState({ musicVolume: Math.min(1, Math.max(0, saved.musicVolume)) });
     if (typeof saved.effectsVolume === 'number') useSettings.setState({ effectsVolume: Math.min(1, Math.max(0, saved.effectsVolume)) });
   } catch { /* defaults */ }
@@ -105,6 +107,8 @@ export function setMotion(motion: MotionPref) {
 
 export function setMusic(music: boolean) { useSettings.setState({ music }); persistSettings(); }
 export function setEffects(effects: boolean) { useSettings.setState({ effects }); persistSettings(); }
+export function setAmbienceOn(ambience: boolean) { useSettings.setState({ ambience }); persistSettings(); }
+export function setVoices(voices: boolean) { useSettings.setState({ voices }); persistSettings(); }
 export function setMusicVolume(musicVolume: number) { useSettings.setState({ musicVolume }); persistSettings(); }
 export function setEffectsVolume(effectsVolume: number) { useSettings.setState({ effectsVolume }); persistSettings(); }
 

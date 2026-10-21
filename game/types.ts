@@ -6,7 +6,7 @@ export type Packaging = 'bulk' | 'sealed';
 export type WashMethod = 'rinse' | 'thorough';
 export type SortLevel = 'none' | 'standard' | 'strict';
 export type CutStyle = 'split' | 'sliced';
-export type NpcId = 'baba' | 'amaka' | 'chinedu';
+export type NpcId = 'baba' | 'amaka' | 'chinedu' | 'hauwa';
 export type SeedTier = 'local' | 'improved' | 'certified';
 export type CropType = 'ginger' | 'soybean';
 export type PrepMethod = 'clear' | 'ridge';
@@ -268,7 +268,14 @@ export interface Shipment {
   /** Final payment in naira once it is known. */
   payout: number | null;
   events: ShipmentEvent[];
+  /**
+   * The Lokoja crossing on the road to Lagos: pay the ferry toll or risk the bush bypass.
+   * `choice` is null until the player (or, by default, the driver) decides; `resolved` once the truck is past.
+   */
+  ferry?: { choice: FerryChoice | null; resolved: boolean };
 }
+
+export type FerryChoice = 'toll' | 'bypass';
 
 export interface Loan {
   id: number;

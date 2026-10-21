@@ -27,7 +27,14 @@ export const NPC_SPOTS: Record<NpcId, { pos: [number, number, number]; facing: n
   baba: { pos: [-6.5, 0, -10], facing: Math.PI * 0.8, variant: 'male-f', tone: 1 },
   amaka: { pos: [9.8, 0, -3.3], facing: -Math.PI * 0.6, variant: 'female-d', tone: 2 },
   chinedu: { pos: [-5.2, 0, -2.8], facing: Math.PI * 0.25, variant: 'male-c', tone: 3 },
+  hauwa: { pos: [6.9, 0, -8.3], facing: Math.PI * 0.5, variant: 'female-a', tone: 1 },
 };
+
+/** Washing troughs beside the shed: processing hands carry rhizomes from here to the racks. */
+export const TROUGH_POS = [11.4, 0, -9.3] as const;
+/** Where the haulage lorry stops inside the gate to load (facing east), and the pile it loads from. */
+export const LORRY_STOP = [-5.4, 0, -8.5] as const;
+export const LOAD_PILE = [-5.0, 0, -6.9] as const;
 
 export const SIGNBOARD_POS = [-9.2, 0, -6.8] as const;
 

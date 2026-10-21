@@ -1,8 +1,8 @@
 'use client';
 import { Text } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
-import { useMemo, useRef } from 'react';
-import { CanvasTexture, RepeatWrapping, SRGBColorSpace, Shape, type Group, type Mesh } from 'three';
+import { useLayoutEffect, useMemo, useRef } from 'react';
+import { CanvasTexture, Color, Object3D, RepeatWrapping, SRGBColorSpace, Shape, type Group, type InstancedMesh, type Mesh } from 'three';
 import { SAFE_MOISTURE, compoundSite, plotsAt, storedKg, warehouseCapacity, type CompoundSiteId } from '../../game/simulation';
 import { useGameStore } from '../../stores/gameStore';
 import { BOREHOLE_POS, BUILDINGS, PLOT_SPACING, SIGNBOARD_POS, TANK_POS, plotPosition } from './layout';
@@ -169,7 +169,7 @@ export function Warehouse() {
 
   // Sacks pile up: brown jute for fresh, beige for dried, white for sealed export bags,
   // golden flat for powder, green-tan for soybean.
-  const sacks = batches.flatMap(x => Array.from({ length: Math.ceil(x.kg / (x.product === 'fresh' ? 100 : 50)) }, () => x)).slice(0, 40)
+  const sacks = batches.flatMap(x => Array.from({ length: Math.ceil(x.kg / (x.product === 'fresh' ? 100 : 50)) }, () => x)).slice(0, 60)
     .map(x => ({
       flat: x.product === 'powder',
       tint: x.product === 'fresh'
@@ -191,7 +191,7 @@ export function Warehouse() {
       <BlockBuilding w={b.size[0]} d={b.size[1]} h={3.2} wall="#d8d3c6" band="#3f6e8c" door="open" />
       <Text position={[0, 2.75, b.size[1] / 2 + 0.05]} fontSize={0.3} color="#22313b">STORE</Text>
       {sacks.map((sack, i) => {
-        const layer = Math.floor(i / 20);
+        const layer = Math.floor(i / 20); // piles grow taller as stock grows
         const idx = i % 20;
         const row = Math.floor(idx / 5);
         const col = idx % 5;
@@ -199,9 +199,9 @@ export function Warehouse() {
         return (
           <Model
             key={`sack-${i}`}
-            model={sack.flat ? 'sackFlat' : 'sack'}
+            model={sack.flat ? 'box' : 'sack'}
             tint={sack.tint}
-            scale={sack.flat ? 1.3 : 1.55}
+            scale={sack.flat ? 2.2 : 1.55}
             position={[-2.4 + col * 0.58, y, b.size[1] / 2 + 0.5 + row * 0.55]}
             rotation={[0, (i * 1.7) % 0.6, 0]}
           />
@@ -222,21 +222,47 @@ export function Warehouse() {
   );
 }
 
+const SLICES = 30;
+/**
+ * Ginger slices on a rack. Fresh ones are plump pale-yellow discs; as moisture falls they shrink,
+ * darken and curl, and under 10% they have shrivelled into the dark curled "fingers" of dried ginger.
+ */
+function RackSlices({ moisture, quality }: { moisture: number; quality: number }) {
+  const mesh = useRef<InstancedMesh>(null);
+  useLayoutEffect(() => {
+    const m = mesh.current;
+    if (!m) return;
+    const shrivel = Math.max(0, Math.min(1, (72 - moisture) / 62)), o = new Object3D(), c = new Color();
+    const dull = (100 - quality) * 0.0015;
+    for (let i = 0; i < SLICES; i++) {
+      const col = i % 5, row = Math.floor(i / 5), jitter = Math.sin(i * 12.9) * 0.5 + 0.5, jit2 = Math.cos(i * 7.7) * 0.5 + 0.5;
+      const w = 0.2 - shrivel * 0.13, d = 0.16 + shrivel * 0.1, h = 0.025 + shrivel * 0.035 + jitter * shrivel * 0.02;
+      o.position.set(-0.46 + col * 0.23 + (jit2 - 0.5) * 0.05, 0.86 + h / 2, -0.78 + row * 0.31 + (jitter - 0.5) * 0.06);
+      o.rotation.set((jit2 - 0.5) * shrivel * 0.9, jitter * Math.PI, (jitter - 0.5) * shrivel * 1.2);
+      o.scale.set(w, h, d);
+      o.updateMatrix();
+      m.setMatrixAt(i, o.matrix);
+      c.setHSL((48 - shrivel * 20) / 360, 0.72 - shrivel * 0.22 - dull, 0.8 - shrivel * 0.46 - jit2 * 0.04);
+      m.setColorAt(i, c);
+    }
+    m.instanceMatrix.needsUpdate = true;
+    if (m.instanceColor) m.instanceColor.needsUpdate = true;
+  }, [moisture, quality]);
+  return (
+    <instancedMesh ref={mesh} args={[undefined, undefined, SLICES]} castShadow>
+      <boxGeometry args={[1, 1, 1]} />
+      <meshStandardMaterial roughness={moisture > 55 ? 0.35 : 0.95} />
+    </instancedMesh>
+  );
+}
+
 function DryingRack({ x, job }: { x: number; job?: { moisture: number; covered: boolean; quality: number } }) {
-  const dryness = job ? Math.max(0, Math.min(1, (80 - job.moisture) / (80 - SAFE_MOISTURE))) : 0;
-  const isWetFresh = job && job.moisture > 65;
   const isExportReady = job && job.moisture <= SAFE_MOISTURE && job.quality >= 75;
-  const sliceColor = job ? `hsl(${42 - dryness * 10}, ${55 - (100 - job.quality) * 0.3}%, ${78 - dryness * 22}%)` : '#000';
   return (
     <group position={[x, 0, 0]}>
       {[[-0.6, -0.9], [0.6, -0.9], [-0.6, 0.9], [0.6, 0.9]].map(([lx, lz]) => <mesh key={`${lx}${lz}`} position={[lx, 0.4, lz]}><boxGeometry args={[0.06, 0.8, 0.06]} /><meshStandardMaterial color="#6b4c2e" /></mesh>)}
       <mesh position={[0, 0.82, 0]} receiveShadow><boxGeometry args={[1.35, 0.04, 2]} /><meshStandardMaterial color="#77736a" wireframe /></mesh>
-      {job && (
-        <mesh position={[0, 0.85, 0]}>
-          <boxGeometry args={[1.25, 0.03, 1.9]} />
-          <meshStandardMaterial color={sliceColor} roughness={isWetFresh ? 0.25 : 0.95} metalness={isWetFresh ? 0.15 : 0} />
-        </mesh>
-      )}
+      {job && <RackSlices moisture={job.moisture} quality={job.quality} />}
       {/* Export ready stamp indicator on rack when safe moisture <= 12% and quality >= 75 */}
       {isExportReady && !job?.covered && (
         <group position={[0, 0.88, 0.88]}>

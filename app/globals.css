@@ -4162,3 +4162,37 @@ details.dispatch[open] > summary { margin-bottom: 8px; }
 .legal-card code { font-size: 13px; background: var(--panel2); padding: 1px 5px; border-radius: 6px; }
 .legal-card a { color: var(--green2); font-weight: 600; }
 .legal-back { margin-top: 28px; }
+
+
+/* ---- Port drama: Lokoja ferry, Apapa terminal, export certificate ---- */
+.ferry-choice { margin: 8px 0; padding: 10px 12px; border-radius: 14px; background: var(--panel2); border: 1.5px solid var(--green-border-subtle); }
+.ferry-choice h5 { margin: 6px 0 2px; font-family: 'Space Grotesk', sans-serif; }
+.ferry-art { width: 100%; height: auto; border-radius: 10px; display: block; }
+.ferry-boat { animation: ferry-bob 3s ease-in-out infinite; transform-box: fill-box; }
+@keyframes ferry-bob { 50% { transform: translateY(2px) rotate(-0.6deg); } }
+.port-scene { margin: 8px 0; }
+.port-scene svg { width: 100%; height: auto; border-radius: 12px; display: block; }
+.port-ship { animation: ship-pass 26s linear infinite; }
+@keyframes ship-pass { from { transform: translateX(420px); } to { transform: translateX(-160px); } }
+.crane-trolley { animation: trolley 6s ease-in-out infinite alternate; }
+@keyframes trolley { from { transform: translateX(-14px); } to { transform: translateX(40px); } }
+.export-cert { margin: 10px 0; }
+.cert-border { position: relative; padding: 14px 16px 16px; text-align: center; color: #3a2d16; border-radius: 10px;
+  background: repeating-linear-gradient(45deg, #fbf5e1 0 12px, #f7efd4 12px 24px); border: 3px double #b08a2e; box-shadow: 0 2px 10px rgba(80, 60, 10, 0.18); }
+.cert-crest { font-size: 28px; line-height: 1; }
+.cert-agency { display: block; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; font-size: 11px; color: #1f4e8c; }
+.cert-border h4 { margin: 4px 0 0; font-family: 'Space Grotesk', serif; font-size: 20px; letter-spacing: 0.08em; text-transform: uppercase; color: #7a5a10; }
+.cert-sub { display: block; margin-bottom: 8px; color: #6b5a30; }
+.cert-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 4px 14px; margin: 0; text-align: left; font-size: 13px; }
+.cert-fields div { display: flex; gap: 6px; border-bottom: 1px dotted #c9b27a; padding: 2px 0; }
+.cert-fields dt { color: #7a6a40; min-width: 66px; }
+.cert-fields dd { margin: 0; font-weight: 600; }
+.cert-stamps { display: flex; justify-content: center; align-items: center; gap: 18px; margin-top: 10px; }
+.cert-stamp { width: 96px; height: 96px; opacity: 0.88; mix-blend-mode: multiply; }
+.cert-stamp.official { transform: rotate(-12deg); animation: stamp-in 0.55s cubic-bezier(.2, 1.6, .4, 1) both; }
+.cert-stamp.brand { display: flex; flex-direction: column; align-items: center; justify-content: center; border: 3px solid #a3341f; border-radius: 50%;
+  color: #a3341f; transform: rotate(9deg); animation: stamp-in 0.55s 0.35s cubic-bezier(.2, 1.6, .4, 1) both; }
+.cert-emblem { font-size: 32px; line-height: 1; }
+.cert-stamp.brand small { font-size: 9px; font-weight: 700; text-align: center; max-width: 76px; line-height: 1.1; }
+@keyframes stamp-in { from { transform: scale(2.4) rotate(-30deg); opacity: 0; } }
+[data-motion='reduce'] .port-ship, [data-motion='reduce'] .crane-trolley, [data-motion='reduce'] .ferry-boat, [data-motion='reduce'] .cert-stamp { animation: none; }

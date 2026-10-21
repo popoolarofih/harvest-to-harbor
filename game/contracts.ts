@@ -1,5 +1,5 @@
 import {
-  BRAND_PREMIUM, CARGO_INSURANCE_RATE, COMPANY_TRUCK, DEMURRAGE_PER_DAY, ENERGY, EXPORT, EXPORT_FEES, EXPORT_OFFICE_FEE_DISCOUNT, GRADE_MULT, HAULAGE, PACKAGING,
+  BRAND_PREMIUM, BYPASS_DAMAGE, BYPASS_TROUBLE_CHANCE, CARGO_INSURANCE_RATE, LOKOJA_TOLL, COMPANY_TRUCK, DEMURRAGE_PER_DAY, ENERGY, EXPORT, EXPORT_FEES, EXPORT_OFFICE_FEE_DISCOUNT, GRADE_MULT, HAULAGE, PACKAGING,
   PORT_DAYS, ROAD_DAYS,
   SAFE_MOISTURE, SEA_DAMAGE_CHANCE, TRADE_BUYERS, type TradeBuyer,
 } from './config';
@@ -7,7 +7,7 @@ import { isUnlocked, lockedReason } from './levels';
 import { gradeAtLeast, gradeForBatch } from './quality';
 import type { Rng } from './rng';
 import { addXp, blocked, earn, fail, log, money, spend } from './state';
-import type { Batch, Contract, GameState, Haulage, LogLine, Product, QualityGrade, Shipment } from './types';
+import type { Batch, Contract, FerryChoice, GameState, Haulage, LogLine, Product, QualityGrade, Shipment } from './types';
 import { calculateCrewPerks } from './workers';
 import { recordLedgerEntry } from './ledger';
 import { checkPrestigeAchievements, recordGoalProgress } from './endgame';
@@ -262,6 +262,8 @@ export function dispatchContract(s: GameState, id: number, haulage: Haulage = 's
     daysLeft: exportOrder ? ROAD_DAYS : 2, stageDays: exportOrder ? ROAD_DAYS : 2,
     haulage, insured, damage: 0, dispatchedDay: s.day, arrivedDay: null, payDay: null, payout: null,
     events: [{ day: s.day, text: `Loaded ${c.kg.toLocaleString()} kg at the farm. ${haulageInfo(s, haulage).label} heading for ${exportOrder ? 'Lagos' : buyerOf(c).port}.`, severity: 'info' }],
+    // Crew-run shipments leave the crossing to the driver, who pays the toll.
+    ...(passesLokoja(c) ? { ferry: { choice: byCrew ? 'toll' as const : null, resolved: false } } : {}),
   };
   const spent = spend(s, costs.total, byCrew ? 0 : ENERGY.ship);
   let next: GameState = pruneReservations({
@@ -391,6 +393,30 @@ export function quickShip(s: GameState, id: number, byCrew = false): GameState {
 
 const STOPS = ['Kaduna', 'Abuja', 'Lokoja', 'Ibadan'];
 
+/** Does the road leg cross the Niger at Lokoja? Every trip to Lagos does. */
+export const passesLokoja = (c: Pick<Contract, 'buyerId'>) => isExport(c) || buyerOf(c).port === 'Lagos';
+
+/** Decide how the truck gets past Lokoja: pay the ferry toll now, or take the free but rough bypass. */
+export function chooseFerry(s: GameState, shipmentId: number, choice: FerryChoice): GameState {
+  const sh = s.shipments.find(x => x.id === shipmentId);
+  if (!sh?.ferry || sh.stage !== 'road' || sh.ferry.resolved || sh.ferry.choice) return fail(s, 'That truck is already past Lokoja.');
+  if (choice === 'toll' && s.cash < LOKOJA_TOLL) return fail(s, `The toll is ${money(LOKOJA_TOLL)}. Not enough cash.`);
+  const text = choice === 'toll'
+    ? `Paid the Lokoja ferry toll (${money(LOKOJA_TOLL)}). The truck crosses the Niger without a wait.`
+    : 'Told the driver to take the bush bypass around Lokoja. Free, but the road is rough.';
+  let next: GameState = {
+    ...s,
+    shipments: s.shipments.map(x => (x.id === shipmentId ? { ...x, ferry: { choice, resolved: false }, events: [...x.events, { day: s.day, text, severity: 'info' as const }] } : x)),
+    toast: choice === 'toll' ? 'Toll paid. Straight across at Lokoja.' : 'Bypass it is. Hold on tight.',
+  };
+  if (choice === 'toll') {
+    const paid = spend(next, LOKOJA_TOLL, 0);
+    next = { ...paid, finance: { ...paid.finance, logistics: paid.finance.logistics + LOKOJA_TOLL } };
+    next = recordLedgerEntry(next, { id: `ferry-toll-${shipmentId}`, day: s.day, category: 'logistics', amount: LOKOJA_TOLL, referenceId: shipmentId, description: `Lokoja ferry toll for shipment #${shipmentId}` });
+  }
+  return next;
+}
+
 /** Daily: move every shipment along farm → road → Lagos port → sea → buyer → payment, rolling for risks. */
 export function tickShipments(s: GameState, rng: Rng, lines: LogLine[]): GameState {
   let cash = s.cash, xp = 0, reputation = s.reputation;
@@ -423,6 +449,20 @@ export function tickShipments(s: GameState, rng: Rng, lines: LogLine[]): GameSta
     };
 
     const perks = calculateCrewPerks(s.crew ?? []);
+    if (sh.stage === 'road' && sh.ferry && !sh.ferry.resolved) {
+      // The truck reaches Lokoja on its first night out.
+      const choice = sh.ferry.choice;
+      if (choice === 'bypass') {
+        if (rng.chance(BYPASS_TROUBLE_CHANCE)) {
+          sh.daysLeft += 1; sh.damage = Math.min(1, sh.damage + BYPASS_DAMAGE);
+          event('The Lokoja bypass was washed out in places: one day lost and a few bags split open.', 'warning');
+        } else event('The Lokoja bypass was dry and clear. Saved the toll.', 'good');
+      } else {
+        if (choice === null) charge(LOKOJA_TOLL, 'Lokoja ferry toll');
+        event(choice === null ? `No word from the farm, so the driver paid the Lokoja toll (${money(LOKOJA_TOLL)}) and crossed.` : 'Crossed the Niger at Lokoja on the ferry.', 'info');
+      }
+      sh.ferry = { choice: choice ?? 'toll', resolved: true };
+    }
     if (sh.stage === 'road') {
       const roadBenefitMult = (s.coopRoadBenefitDays ?? 0) > 0 ? 0.4 : 1.0;
       const breakdownChance = haulageInfo(s, sh.haulage).breakdownChance * perks.breakdownChanceMult * roadBenefitMult;

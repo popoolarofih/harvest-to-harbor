@@ -54,7 +54,7 @@ function Crops({ p }: { p: PlotState }) {
   );
 }
 
-const FX_COLORS: Record<Fx['kind'], string | null> = { water: '#6fb7e8', fertilize: '#f2f0e6', treat: '#9be07a', prepare: '#7a5a3a', harvest: '#d9b56a', plant: '#7a5a3a', inspect: null, pump: null, process: null, grind: null, ship: null };
+const FX_COLORS: Record<Fx['kind'], string | null> = { water: '#6fb7e8', fertilize: '#f2f0e6', treat: '#9be07a', prepare: '#7a5a3a', harvest: '#6b4a2c', plant: '#7a5a3a', inspect: null, pump: null, process: null, grind: null, ship: null };
 const FX_COUNT = 24;
 
 /** A short particle burst over a plot when the player works it. */
@@ -86,6 +86,37 @@ function PlotFx({ id }: { id: number }) {
   );
 }
 
+const POP = 9;
+/** Harvest joy: plump ginger rhizomes pop up out of the soil in arcs and tumble back down. */
+function HarvestPop({ id }: { id: number }) {
+  const fx = useGameStore(s => (s.fx?.plot === id && s.fx.kind === 'harvest' ? s.fx : null));
+  const mesh = useRef<InstancedMesh>(null);
+  const dummy = useMemo(() => new Object3D(), []);
+  const seeds = useMemo(() => Array.from({ length: POP }, (_, i) => ({ a: (i / POP) * Math.PI * 2 + i, v: 2.6 + (i % 3) * 0.7, r: 0.5 + (i % 4) * 0.25, spin: 4 + i })), []);
+  useFrame(() => {
+    const m = mesh.current;
+    if (!m) return;
+    const age = fx ? (performance.now() - fx.at) / 1000 : 9;
+    m.visible = !!fx && age < 1.3;
+    if (!m.visible) return;
+    seeds.forEach((s, i) => {
+      const y = Math.max(0.1, 0.2 + s.v * age - 4.6 * age * age), out = Math.min(age, 0.7) * s.r;
+      dummy.position.set(Math.cos(s.a) * out, y, Math.sin(s.a) * out);
+      dummy.rotation.set(age * s.spin, s.a, age * s.spin * 0.6);
+      dummy.scale.set(0.11, 0.09, 0.27 * (1 - Math.max(0, age - 1) * 3));
+      dummy.updateMatrix();
+      m.setMatrixAt(i, dummy.matrix);
+    });
+    m.instanceMatrix.needsUpdate = true;
+  });
+  return (
+    <instancedMesh ref={m => { mesh.current = m; }} args={[undefined, undefined, POP]} visible={false}>
+      <capsuleGeometry args={[0.5, 0.8, 3, 6]} />
+      <meshStandardMaterial color="#e8c777" roughness={0.6} />
+    </instancedMesh>
+  );
+}
+
 function Plot({ id }: { id: number }) {
   const p = useGameStore(s => s.plots[id]);
   const selected = useGameStore(s => s.selectedPlot === id);
@@ -105,6 +136,7 @@ function Plot({ id }: { id: number }) {
       {p.status === 'ready' && !p.issue?.detected && <Billboard position={[0, 1.5, 0]}><Text fontSize={0.32} color="#d7f5a8" outlineWidth={0.02} outlineColor="#1b2a12">READY</Text></Billboard>}
       <Text position={[-0.72, 0.1, 0.84]} rotation={[-Math.PI / 2, 0, 0]} fontSize={0.16} color="#f1e6c8" anchorX="left">{plotName(p)}</Text>
       <PlotFx id={id} />
+      <HarvestPop id={id} />
     </group>
   );
 }

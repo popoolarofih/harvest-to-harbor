@@ -7,7 +7,8 @@ import { NPCS, currentMission, type NpcId } from '../../game/simulation';
 import { useGameStore, type StationId, type Target } from '../../stores/gameStore';
 import { isPlaying, reducedMotion, screenTurn } from '../../stores/session';
 import { Okada } from './Buildings';
-import { COLLIDERS, NPC_SPOTS, ROAD_X, STATIONS, TANK_POS, TRUCK_POS, WALK_BOUNDS, plotPosition, targetPosition, targetRadius } from './layout';
+import { COLLIDERS, NPC_SPOTS, ROAD_X, STATIONS, TANK_POS, TROUGH_POS, TRUCK_POS, WALK_BOUNDS, plotPosition, targetPosition, targetRadius } from './layout';
+import { DripDroplets, Egrets, HaulageLorry, Poultry, Porter, WashTroughs } from './Life';
 import { Character, Model, type CharacterAnim, type ModelId } from './models';
 import { player, rotateBy, rotateStep, setCameraMode, toggleCameraMode, view, walkTo, zoomBy } from './playerState';
 
@@ -292,11 +293,14 @@ const WORKER_VARIANTS = ['male-a', 'female-b', 'male-d', 'female-f', 'male-b', '
 function Worker({ index }: { index: number }) {
   const ref = useRef<Group>(null);
   const [anim, setAnim] = useState<CharacterAnim>('walk');
+  const [carrying, setCarrying] = useState(false);
   // At a bought compound there is no shed: everyone works the field.
   const isProcessing = useGameStore(s => !s.site && index < (s.automation.processingWorkers ?? 0));
   const state = useRef({
     goal: new Vector3(),
     wait: index * 0.8,
+    /** Processing hands alternate: wash at the trough, then carry the basket to a rack and spread it. */
+    stage: 0,
     pos: new Vector3(isProcessing ? STATIONS.shed.pos[0] + index : -2 + index, 0, isProcessing ? STATIONS.shed.pos[2] + 2 : -6),
   });
   useFrame((_, rawDt) => {
@@ -305,8 +309,12 @@ function Worker({ index }: { index: number }) {
       st.wait -= dt;
       if (st.wait <= 0) {
         if (isProcessing) {
-          const rackX = [-1.6, 0, 1.6][Math.floor(Math.random() * 3)];
-          st.goal.set(STATIONS.shed.pos[0] + rackX + (Math.random() - 0.5) * 0.4, 0, STATIONS.shed.pos[2] + (Math.random() - 0.5) * 1.2);
+          if (st.stage === 0) st.goal.set(TROUGH_POS[0] + (Math.random() < 0.5 ? 0 : 1.5), 0, TROUGH_POS[2] + 0.9);
+          else {
+            const rackX = [-1.6, 0, 1.6][Math.floor(Math.random() * 3)];
+            st.goal.set(STATIONS.shed.pos[0] + rackX + (Math.random() - 0.5) * 0.4, 0, STATIONS.shed.pos[2] + 1.3);
+          }
+          setCarrying(st.stage === 1);
         } else {
           const { plots: all, site } = useGameStore.getState();
           const plots = all.filter(p => p.compound === site);
@@ -321,7 +329,8 @@ function Worker({ index }: { index: number }) {
       const d = new Vector3().subVectors(st.goal, st.pos).setY(0);
       if (d.length() < 0.15) {
         st.wait = 3 + Math.random() * 4;
-        setAnim(isProcessing ? 'interact-right' : Math.random() < 0.5 ? 'interact-right' : 'pick-up');
+        if (isProcessing) { st.stage = 1 - st.stage; setCarrying(false); setAnim(st.stage === 1 ? 'pick-up' : 'interact-right'); }
+        else setAnim(Math.random() < 0.5 ? 'interact-right' : 'pick-up');
       } else {
         d.normalize().multiplyScalar(2.2 * dt);
         st.pos.add(d);
@@ -331,13 +340,25 @@ function Worker({ index }: { index: number }) {
     ref.current?.position.copy(st.pos);
   });
   const isWorking = anim !== 'walk';
-  const toolModel: ModelId | null = isProcessing
-    ? (index % 2 === 0 ? 'box' : 'bucket')
-    : (index % 2 === 0 ? 'hoe' : 'shovel');
+  const wateringCan = !isProcessing && index % 2 === 1;
+  const toolModel: ModelId | null = isProcessing ? null : wateringCan ? null : 'hoe';
 
   return (
     <group ref={ref}>
       <Character variant={WORKER_VARIANTS[index % WORKER_VARIANTS.length]} tone={(index + 2) % 5} anim={anim} />
+      {/* Field hands: a short daba, or a watering can. Processing hands: a basket of fresh rhizomes while carrying. */}
+      {wateringCan && (
+        <group position={isWorking ? [0.3, 0.55, 0.3] : [0.28, 0.5, 0.05]} rotation={isWorking ? [0.6, 0, -0.5] : [0, 0, 0]}>
+          <Model model="bucket" scale={1.1} tint="#4f7ea8" />
+          <mesh position={[0, 0.18, 0.2]} rotation={[0.9, 0, 0]}><cylinderGeometry args={[0.025, 0.04, 0.4, 6]} /><meshStandardMaterial color="#4f7ea8" metalness={0.4} /></mesh>
+        </group>
+      )}
+      {isProcessing && carrying && (
+        <group position={[0, 1.0, 0.38]}>
+          <Model model="box" scale={0.9} />
+          {[0, 1, 2, 3].map(i => <mesh key={i} position={[(i % 2 - 0.5) * 0.18, 0.25, (i < 2 ? -0.08 : 0.1)]} rotation={[0, i, 0.3]}><capsuleGeometry args={[0.04, 0.12, 3, 6]} /><meshStandardMaterial color="#e6c37a" /></mesh>)}
+        </group>
+      )}
       {toolModel && (
         <group position={isWorking ? [0.25, 0.45, 0.25] : [0.2, 0.35, -0.1]} rotation={isWorking ? [0.2, 0, -0.3] : [0.1, 0, 0.2]}>
           <Model model={toolModel} scale={toolModel === 'hoe' || toolModel === 'shovel' ? 1.5 : 0.8} />
@@ -368,30 +389,11 @@ function Vehicle({ model, lane, speed, offset, scale = 1.4 }: { model: ModelId |
   );
 }
 
-const TRUCK_ROUTE = [new Vector3(...TRUCK_POS), new Vector3(TRUCK_POS[0], 0, -9), new Vector3(ROAD_X - 0.85, 0, -9), new Vector3(ROAD_X - 0.85, 0, 70)];
-const TRUCK_LEG_SECONDS = [2.2, 2.5, 9];
-
-/** The farm truck. After an export shipment it drives out of the gate and south toward Lagos, then comes back. */
+/** The farm's own truck, parked by the gate. Export pickups are done by the haulage lorry (see Life.tsx). */
 function FarmTruck() {
-  const ref = useRef<Group>(null), load = useRef<Group>(null);
-  const fx = useGameStore(s => (s.fx?.kind === 'ship' ? s.fx : null));
-  const p = useMemo(() => new Vector3(), []);
-  useFrame(() => {
-    if (!ref.current) return;
-    let t = fx ? (performance.now() - fx.at) / 1000 : Infinity;
-    let leg = 0;
-    while (leg < TRUCK_LEG_SECONDS.length && t > TRUCK_LEG_SECONDS[leg]) { t -= TRUCK_LEG_SECONDS[leg]; leg++; }
-    if (load.current) load.current.visible = leg < TRUCK_LEG_SECONDS.length;
-    if (leg >= TRUCK_LEG_SECONDS.length) { ref.current.position.copy(TRUCK_ROUTE[0]); ref.current.rotation.y = Math.PI; ref.current.visible = true; return; }
-    const a = TRUCK_ROUTE[leg], b = TRUCK_ROUTE[leg + 1];
-    p.lerpVectors(a, b, t / TRUCK_LEG_SECONDS[leg]);
-    ref.current.position.copy(p);
-    ref.current.rotation.y = Math.atan2(b.x - a.x, b.z - a.z);
-  });
   return (
-    <group ref={ref} position={TRUCK_POS} onClick={e => { e.stopPropagation(); walkTo(new Vector3(...TRUCK_POS), { kind: 'station', id: 'truck' }); }}>
+    <group position={TRUCK_POS} rotation={[0, Math.PI, 0]} onClick={e => { e.stopPropagation(); walkTo(new Vector3(...TRUCK_POS), { kind: 'station', id: 'truck' }); }}>
       <Model model="truck" scale={1.55} />
-      <group ref={load} visible={false}>{[-0.35, 0.35].flatMap(x => [-0.6, 0].map(z => <Model key={`${x}${z}`} model="sack" tint="#f6f6f2" scale={1.4} position={[x, 1.1, z - 0.5]} />))}</group>
     </group>
   );
 }
@@ -419,6 +421,12 @@ export default function Actors() {
       {home && (Object.keys(NPC_SPOTS) as NpcId[]).map(id => <Npc key={id} id={id} />)}
       <Workers />
       {home && <FarmTruck />}
+      {home && <HaulageLorry />}
+      {home && <Porter />}
+      {home && <WashTroughs />}
+      <Poultry />
+      <Egrets />
+      <DripDroplets />
       {home && <StationHitboxes />}
       <Vehicle model="van" lane={0.85} speed={6} offset={0} />
       <Vehicle model="pickup" lane={-0.85} speed={-5} offset={50} />
